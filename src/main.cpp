@@ -6,6 +6,9 @@
 // + read the top of imgui.cpp. Read online:
 // https://github.com/ocornut/imgui/tree/master/docs
 
+#include "ps2000.h"
+#define _USE_MATH_DEFINES
+
 #include "globals.hpp"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
