@@ -1,6 +1,7 @@
 # Xmake cache
 .xmake/
 build/
+ps2000/
 .cache
 compile_commands.json
 
