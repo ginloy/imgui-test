@@ -34,7 +34,7 @@ static void glfw_error_callback(int error, const char *description) {
   fprintf(stderr, "Glfw Error %d: %s\n", error, description);
 }
 
-struct Channel {
+struct ChannelTemp {
   ImVec4 color = ImVec4(1, 1, 1, 1);
   std::vector<double> data;
   std::vector<std::complex<double>> transformedData;
@@ -47,7 +47,7 @@ struct OscilloscopeSettings {
   bool follow = false;
   float timeRange = 1.0;
 
-  Channel channels[2];
+  ChannelTemp channels[2];
 };
 
 struct TestData {
@@ -56,7 +56,7 @@ struct TestData {
   double duration = 0.0;
   double startTime = 0.0;
 
-  Channel channels[2];
+  ChannelTemp channels[2];
 
   void clearData() {
     for (int i = 0; i < 2; ++i) {
@@ -160,7 +160,7 @@ void DrawOscilloscope(OscilloscopeSettings &settings, const ImVec2 &size) {
     auto start = limits.X.Min - range / 2;
     auto end = limits.X.Max + range / 2;
 
-    const auto name = "Channel " + std::to_string(i + 1);
+    const auto name = "ChannelTemp " + std::to_string(i + 1);
     std::vector<double> xs;
     std::vector<double> ys;
     for (double i = start; i < end; i += (end - start) / PLOT_SAMPLES) {
@@ -198,7 +198,7 @@ void ShowControls(OscilloscopeSettings &settings) {
                    "%.3f seconds", ImGuiSliderFlags_AlwaysClamp);
   ImGui::EndDisabled();
 
-  // Channel controls
+  // ChannelTemp controls
   for (int ch = 0; ch < 2; ch++) {
     ImGui::PushID(ch);
     ImGui::Separator();
