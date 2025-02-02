@@ -1,9 +1,11 @@
 #ifndef PICO_HPP
 #define PICO_HPP
 
+#include <atomic>
 #include <mutex>
+#include <thread>
 #include <vector>
-#include "ps2000.h"
+#include "libps2000/ps2000.h"
 
 #define DEFAULT_VOLTAGE_RANGE PS2000_10V
 #define SAMPLE_INTERVAL 20

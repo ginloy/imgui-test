@@ -8,10 +8,9 @@
 
 #include <chrono>
 #define _USE_MATH_DEFINES
-#include "ps2000.h"
+#include "libps2000/ps2000.h"
 #include <thread>
 
-#include <iostream>
 #include "globals.hpp"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -22,6 +21,7 @@
 #include <cmath>
 #include <complex>
 #include <cstring>
+#include <iostream>
 #include <stdio.h>
 #include <string>
 #include <vector>
@@ -219,40 +219,38 @@ int main(int, char **) {
   Scope scope;
   scope.openScope();
 
-  scope.setStreamingMode(true);
-  scope.setVoltageRange(PS2000_50MV);
-  std::cout << scope.getSampleRate() << std::endl;
+  if (scope.isOpen()) {
+    scope.setStreamingMode(true);
+    scope.setVoltageRange(PS2000_5V);
+    std::cout << scope.getSampleRate() << std::endl;
 
-  std::this_thread::sleep_for(std::chrono::seconds(5));
-  scope.startStream();
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+    scope.startStream();
 
-  auto start= std::chrono::high_resolution_clock::now();
-  for (int i = 0; i < 30; ++i) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    scope.lockChannels();
-    const Channel &ch = scope.getChannelA();
-    double total = 0;
-    size_t count = 0;
-    for (int i = ch.data.size() - SAMPLE_RATE; i < ch.data.size();++i) {
-      if (i < 0) {
-        continue;
+    auto start = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < 30; ++i) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+      scope.lockChannels();
+      const Channel &ch = scope.getChannelA();
+      double total = 0;
+      size_t count = 0;
+      for (int i = ch.data.size() - SAMPLE_RATE; i < ch.data.size(); ++i) {
+        if (i < 0) {
+          continue;
+        }
+        total += ch.data[i];
+        count += 1;
       }
-      total += ch.data[i];
-      count += 1;
+      printf("%.3f V\n", total / count);
+      scope.unlockChannels();
     }
-    printf("%.3f V\n", total / count);
-    scope.unlockChannels();
+    scope.stopStream();
+
+    auto timeTaken = std::chrono::high_resolution_clock::now() - start;
+    printf("%zu samples in %ld seconds\n", scope.getChannelA().data.size(),
+           std::chrono::duration_cast<std::chrono::seconds>(timeTaken).count());
   }
-  scope.stopStream();
 
-  auto timeTaken = std::chrono::high_resolution_clock::now() - start;
-  printf("%zu samples in %lld seconds", scope.getChannelA().data.size(), std::chrono::duration_cast<std::chrono::seconds>(timeTaken).count());
-  
-  
-  
-
-  
-  
   // Setup window
   glfwSetErrorCallback(glfw_error_callback);
   if (!glfwInit())

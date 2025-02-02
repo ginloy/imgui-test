@@ -1,6 +1,7 @@
 #include "pico.hpp"
 
-#include "ps2000.h"
+#include "libps2000/ps2000.h"
+#include <cstdio>
 
 #define TRUE 1
 #define FALSE 0

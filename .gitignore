@@ -3,6 +3,8 @@
 build/
 ps2000/
 .cache
+.direnv
+.envrc
 compile_commands.json
 
 # MacOS Cache
