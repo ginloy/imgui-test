@@ -6,6 +6,11 @@ target("imgui-test")
     set_kind("binary")
     add_files("src/*.cpp")
     add_includedirs("include")
+    if is_os("windows") then
+        add_includedirs("ps2000")
+        add_linkdirs("ps2000")
+    end
+    add_links("ps2000")
     add_packages("imgui", "opengl", "implot", "fftw")
     set_languages("c++20")
 
