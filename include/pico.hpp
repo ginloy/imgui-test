@@ -6,7 +6,27 @@
 #include "ps2000.h"
 
 #define DEFAULT_VOLTAGE_RANGE PS2000_10V
+#define SAMPLE_INTERVAL 20
+#define TIME_UNITS PS2000_US
 
+constexpr double timeUnitToSecs(enPS2000TimeUnits unit) {
+  switch (unit) {
+  case PS2000_FS:
+    return 1.0 / 1e15;
+  case PS2000_PS:
+    return 1.0 / 1e12;
+  case PS2000_NS:
+    return 1.0 / 1e9;
+  case PS2000_US:
+    return 1.0 / 1e6;
+  case PS2000_MS:
+    return 1.0 / 1000;
+  case PS2000_S:
+    return 1.0;
+  default:
+    return 1.0;
+  }
+}
 
 struct Channel {
   std::vector<double> data;
@@ -27,21 +47,31 @@ class Scope {
   Channel channelA;
   Channel channelB;
 
+public:
   Scope();
   ~Scope();
 
   void openScope();
   bool isOpen() const;
-  constexpr double getDeltaTime() const;
-  constexpr double getSampleRate() const;
+
+  constexpr double getDeltaTime() const {
+    double unitInSecs = timeUnitToSecs(TIME_UNITS);
+    return SAMPLE_INTERVAL * unitInSecs;
+  }
+
+  constexpr double getSampleRate() const { return 1. / getDeltaTime(); }
 
   void setVoltageRange(enPS2000Range range);
   void setStreamingMode(bool dc);
   bool startStream();
   void stopStream();
 
+  const Channel &getChannelA() const;
+  const Channel &getChannelB() const;
+  void lockChannels();
+  void unlockChannels();
+
   void clearData();
-   
 
   // Scope object cannot be copied
   Scope(const Scope &other) = delete;

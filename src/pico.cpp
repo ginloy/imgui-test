@@ -1,12 +1,9 @@
 #include "pico.hpp"
 
 #include "ps2000.h"
-#include <cstdio>
 
 #define TRUE 1
 #define FALSE 0
-#define SAMPLE_INTERVAL 20
-#define TIME_UNITS PS2000_US
 
 std::vector<double> *channelAData = nullptr;
 std::vector<double> *channelBData = nullptr;
@@ -58,35 +55,26 @@ void streamCallback(int16_t **overviewBuffers, int16_t overflow,
   channelBLock->lock();
 
   for (auto i = 0; i < nValues; ++i) {
-    channelAData->push_back((double)overviewBuffers[0][i] /
-                            (double)PS2000_MAX_VALUE * maxVoltage);
-    channelBData->push_back((double)overviewBuffers[1][i] /
-                            (double)PS2000_MAX_VALUE * maxVoltage);
+    auto chAMax =
+        (double)overviewBuffers[0][i] / (double)PS2000_MAX_VALUE * maxVoltage;
+    auto chAMin =
+        (double)overviewBuffers[1][i] / (double)PS2000_MAX_VALUE * maxVoltage;
+    auto chBMax =
+        (double)overviewBuffers[2][i] / (double)PS2000_MAX_VALUE * maxVoltage;
+    auto chBMin =
+        (double)overviewBuffers[3][i] / (double)PS2000_MAX_VALUE * maxVoltage;
+    if (chAMax != chAMin || chBMax != chBMin) {
+      printf("test\n");
+    }
+    channelAData->push_back(chAMax);
+    channelBData->push_back(chBMax);
   }
 
   channelALock->unlock();
   channelBLock->unlock();
 }
 
-constexpr double timeUnitToSecs(enPS2000TimeUnits unit) {
-  switch (unit) {
-  case PS2000_FS:
-    return 1.0 / 1e15;
-  case PS2000_PS:
-    return 1.0 / 1e12;
-  case PS2000_NS:
-    return 1.0 / 1e9;
-  case PS2000_US:
-    return 1.0 / 1e6;
-  case PS2000_MS:
-    return 1.0 / 1000;
-  case PS2000_S:
-    return 1.0;
-  default:
-    return 1.0;
-  }
-}
-
+Scope::Scope() {}
 Scope::~Scope() {
   if (streaming) {
     ps2000_stop(handle);
@@ -113,13 +101,6 @@ void Scope::openScope() {
 }
 
 bool Scope::isOpen() const { return open; }
-
-constexpr double Scope::getDeltaTime() const {
-  double unitInSecs = timeUnitToSecs(TIME_UNITS);
-  return SAMPLE_INTERVAL * unitInSecs;
-}
-
-constexpr double Scope::getSampleRate() const { return 1. / getDeltaTime(); }
 
 void Scope::clearData() {
   channelA.dataLock.lock();
@@ -163,9 +144,9 @@ bool Scope::startStream() {
 
   ps2000_set_channel(handle, PS2000_CHANNEL_A, TRUE, dc, voltageRange);
   ps2000_set_channel(handle, PS2000_CHANNEL_B, TRUE, dc, voltageRange);
-  auto started =
-      ps2000_run_streaming_ns(handle, SAMPLE_INTERVAL, TIME_UNITS,
-                              getSampleRate() * 10., FALSE, 1, 150000);
+  ps2000_set_trigger(handle, PS2000_NONE, 0, PS2000_RISING, 0, 0);
+  auto started = ps2000_run_streaming_ns(handle, SAMPLE_INTERVAL, TIME_UNITS,
+                                         getSampleRate() * 10., FALSE, 1, 1e6);
   if (!started) {
     return false;
   }
@@ -193,4 +174,17 @@ void Scope::stopStream() {
   channelBData = nullptr;
   channelALock = nullptr;
   channelBLock = nullptr;
+}
+
+const Channel &Scope::getChannelA() const { return channelA; }
+const Channel &Scope::getChannelB() const { return channelB; }
+
+void Scope::lockChannels() {
+  channelA.dataLock.lock();
+  channelB.dataLock.lock();
+}
+
+void Scope::unlockChannels() {
+  channelA.dataLock.unlock();
+  channelB.dataLock.unlock();
 }
