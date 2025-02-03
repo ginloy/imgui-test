@@ -9,7 +9,6 @@
 #include <chrono>
 #define _USE_MATH_DEFINES
 #include "libps2000/ps2000.h"
-#include <thread>
 
 #include "globals.hpp"
 #include "imgui.h"
@@ -225,8 +224,8 @@ int main(int, char **) {
     scope.setVoltageRange(PS2000_5V);
     std::cout << scope.getSampleRate() << std::endl;
 
-    scope.startFreqSweep(0, 50, 2.0, 10, 30, PS2000_UP);
     scope.startStream();
+    scope.startNoise(2.0);
 
     auto start = std::chrono::high_resolution_clock::now();
     size_t idx = 0;
@@ -234,7 +233,7 @@ int main(int, char **) {
     while (std::chrono::high_resolution_clock::now() - start <
            std::chrono::seconds(20)) {
       scope.lockChannels();
-      for (; idx < ch.data.size(); idx += 100) {
+      for (; idx < ch.data.size(); idx += 1000) {
         printf("%.3f V\n", ch.data[idx]);
       }
       scope.unlockChannels();

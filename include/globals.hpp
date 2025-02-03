@@ -2,7 +2,5 @@
 #define GLOBALS_HPP
 
 #define PLOT_SAMPLES 100000UL
-#define SAMPLE_RATE 48000.0
-#define DELTA_TIME (1.0 / SAMPLE_RATE)
 
 #endif

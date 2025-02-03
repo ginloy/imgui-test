@@ -31,6 +31,16 @@ constexpr double timeUnitToSecs(enPS2000TimeUnits unit) {
     return 1.0;
   }
 }
+constexpr double DELTA_TIME = timeUnitToSecs(TIME_UNITS) * SAMPLE_INTERVAL;
+constexpr double SAMPLE_RATE = 1. / DELTA_TIME;
+constexpr size_t WAVEFORM_SECONDS = 30;
+constexpr size_t PHASE_ACC_SIZE = 1UL << 32;
+constexpr size_t AWG_BUF_SIZE = 4096;
+constexpr size_t DDS_FREQ = 48e6;
+constexpr double DDS_PERIOD = 1. / DDS_FREQ;
+constexpr uint32_t DELTA_PHASE = SAMPLE_RATE / DDS_FREQ *  PHASE_ACC_SIZE;
+
+std::array<uint8_t, AWG_BUF_SIZE> getNoiseWaveform();
 
 struct Channel {
   std::vector<double> data;
@@ -73,7 +83,7 @@ public:
   bool startStream();
   void stopStream();
 
-  void startNoise();
+  bool startNoise(double pkToPkV);
   bool startFreqSweep(double start, double end, double pkToPkV, uint32_t sweeps,
                       double sweepDuration, PS2000_SWEEP_TYPE sweepType);
   void stopSigGen();

@@ -1,6 +1,7 @@
 #include "pico.hpp"
 
 #include "libps2000/ps2000.h"
+#include <cstdint>
 #include <cstdio>
 
 #define TRUE 1
@@ -11,6 +12,15 @@ std::vector<double> *channelBData = nullptr;
 std::mutex *channelALock = nullptr;
 std::mutex *channelBLock = nullptr;
 enPS2000Range voltageRangeGlob = DEFAULT_VOLTAGE_RANGE;
+
+std::array<uint8_t, AWG_BUF_SIZE> getNoiseWaveform() {
+  std::array<uint8_t, AWG_BUF_SIZE> buffer;
+  srand(0);
+  for (auto &point : buffer) {
+    point = rand() % UINT8_MAX;
+  }
+  return buffer;
+}
 
 void streamCallback(int16_t **overviewBuffers, int16_t overflow,
                     uint32_t triggeredAt, int16_t triggered, int16_t auto_stop,
@@ -192,11 +202,36 @@ void Scope::unlockChannels() {
   channelB.dataLock.unlock();
 }
 
-void Scope::startNoise() {}
+bool Scope::startNoise(double pkToPkV) {
+  bool restartStream = false;
+  if (streaming) {
+    stopStream();
+    restartStream = true;
+  }
+  auto waveForm = getNoiseWaveform();
+  auto deltaPhase = SAMPLE_RATE / 4096 * waveForm.size() / 48e6 * pow(2, 32);
+  auto success = ps2000_set_sig_gen_arbitrary(
+      handle, 0, pkToPkV * 1e6, DELTA_PHASE, DELTA_PHASE, 0, 1, waveForm.data(),
+      waveForm.size(), PS2000_UP, 0);
+  if (restartStream) {
+    startStream();
+  }
+  if (success) {
+    printf("Success\n");
+    generating = true;
+    return true;
+  }
+  return false;
+}
 
 bool Scope::startFreqSweep(double start, double end, double pkToPkV,
                            uint32_t sweeps, double sweepDuration,
                            PS2000_SWEEP_TYPE sweepType) {
+  bool restartStream = false;
+  if (streaming) {
+    stopStream();
+    restartStream = true;
+  }
 
   uint32_t pkToPkMicroV = pkToPkV * 1e6;
   double range = end - start;
@@ -206,6 +241,9 @@ bool Scope::startFreqSweep(double start, double end, double pkToPkV,
                                              PS2000_SINE, start, end, increment,
                                              DWELL_TIME, sweepType, sweeps);
 
+  if (restartStream) {
+    startStream();
+  }
   if (success) {
     generating = true;
     return true;
