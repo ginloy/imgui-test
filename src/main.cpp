@@ -220,6 +220,8 @@ int main(int, char **) {
   scope.openScope();
 
   if (scope.isOpen()) {
+    scope.startFreqSweep(20.0, 500.0, 2.0, 1, PS2000_UPDOWN, 5.0);
+
     scope.setStreamingMode(true);
     scope.setVoltageRange(PS2000_5V);
     std::cout << scope.getSampleRate() << std::endl;
@@ -228,23 +230,18 @@ int main(int, char **) {
     scope.startStream();
 
     auto start = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < 30; ++i) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    size_t idx = 0;
+    const auto &ch = scope.getChannelA();
+    while (std::chrono::high_resolution_clock::now() - start <
+           std::chrono::seconds(20)) {
       scope.lockChannels();
-      const Channel &ch = scope.getChannelA();
-      double total = 0;
-      size_t count = 0;
-      for (int i = ch.data.size() - SAMPLE_RATE; i < ch.data.size(); ++i) {
-        if (i < 0) {
-          continue;
-        }
-        total += ch.data[i];
-        count += 1;
+      for (; idx < ch.data.size(); idx += 100) {
+        printf("%.3f V\n", ch.data[idx]);
       }
-      printf("%.3f V\n", total / count);
       scope.unlockChannels();
     }
     scope.stopStream();
+    scope.stopSigGen();
 
     auto timeTaken = std::chrono::high_resolution_clock::now() - start;
     printf("%zu samples in %ld seconds\n", scope.getChannelA().data.size(),
