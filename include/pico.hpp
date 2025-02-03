@@ -11,6 +11,8 @@
 #define SAMPLE_INTERVAL 20
 #define TIME_UNITS PS2000_US
 
+constexpr double DWELL_TIME = 0.02;
+
 constexpr double timeUnitToSecs(enPS2000TimeUnits unit) {
   switch (unit) {
   case PS2000_FS:
@@ -42,6 +44,7 @@ class Scope {
 
   bool open = false;
   std::atomic<bool> streaming = false;
+  bool generating = false;
   std::thread streamTask;
   bool dc = false;
 
@@ -55,6 +58,8 @@ public:
 
   void openScope();
   bool isOpen() const;
+  bool isStreaming() const;
+  bool isGenerating() const;
 
   constexpr double getDeltaTime() const {
     double unitInSecs = timeUnitToSecs(TIME_UNITS);
@@ -67,6 +72,11 @@ public:
   void setStreamingMode(bool dc);
   bool startStream();
   void stopStream();
+
+  void startNoise();
+  bool startFreqSweep(double start, double end, double pkToPkV,
+                           uint32_t sweeps, PS2000_SWEEP_TYPE sweepType, double duration);
+  void stopSigGen();
 
   const Channel &getChannelA() const;
   const Channel &getChannelB() const;

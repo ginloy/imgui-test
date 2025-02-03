@@ -102,6 +102,8 @@ void Scope::openScope() {
 }
 
 bool Scope::isOpen() const { return open; }
+bool Scope::isStreaming() const { return streaming; }
+bool Scope::isGenerating() const { return generating; }
 
 void Scope::clearData() {
   channelA.dataLock.lock();
@@ -188,4 +190,31 @@ void Scope::lockChannels() {
 void Scope::unlockChannels() {
   channelA.dataLock.unlock();
   channelB.dataLock.unlock();
+}
+
+void Scope::startNoise() {}
+
+bool Scope::startFreqSweep(double start, double end, double pkToPkV,
+                           uint32_t sweeps, PS2000_SWEEP_TYPE sweepType,
+                           double duration) {
+
+  uint32_t pkToPkMicroV = pkToPkV * 1e6;
+  double range = end - start;
+  double increments = duration / DWELL_TIME;
+  float increment = range / increments;
+  auto success = ps2000_set_sig_gen_built_in(handle, 0, pkToPkMicroV, PS2000_SINE,
+                                         start, end, increment, DWELL_TIME,
+                                         sweepType, sweeps);
+
+  if (success) {
+    generating = true;
+    return true;
+  }
+  return false;
+}
+
+void Scope::stopSigGen() {
+  ps2000_set_sig_gen_built_in(handle, 0, 0, PS2000_DC_VOLTAGE, 0, 0, 0, 0,
+                              PS2000_UP, 0);
+  generating = false;
 }
