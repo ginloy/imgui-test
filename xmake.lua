@@ -12,10 +12,9 @@ if is_os("windows") then
 end
 if is_os("macosx") then
   add_includedirs("/Library/Frameworks/PicoSDK.framework/Headers")
-  add_links("/Library/Frameworks/PicoSDK.framework/Libraries/libps2000/libps2000.dylib")
-else
-  add_links("ps2000")
+  add_linkdirs("/Library/Frameworks/PicoSDK.framework/Libraries/libps2000")
 end
+add_links("ps2000")
 add_packages("imgui", "opengl", "implot", "fftw")
 set_languages("c++20")
 
