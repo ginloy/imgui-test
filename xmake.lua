@@ -1,18 +1,23 @@
 add_rules("mode.debug", "mode.release")
 
-add_requires("imgui", {configs={glfw_opengl3 = true}})
+add_requires("imgui", { configs = { glfw_opengl3 = true } })
 add_requires("opengl", "implot", "fftw")
 target("imgui-test")
-    set_kind("binary")
-    add_files("src/*.cpp")
-    add_includedirs("include")
-    if is_os("windows") then
-        add_includedirs("ps2000")
-        add_linkdirs("ps2000")
-    end
-    add_links("ps2000")
-    add_packages("imgui", "opengl", "implot", "fftw")
-    set_languages("c++20")
+set_kind("binary")
+add_files("src/*.cpp")
+add_includedirs("include")
+if is_os("windows") then
+  add_includedirs(".")
+  add_linkdirs("libps2000")
+end
+if is_os("macosx") then
+  add_includedirs("/Library/Frameworks/PicoSDK.framework/Headers")
+  add_links("/Library/Frameworks/PicoSDK.framework/Libraries/libps2000/libps2000.dylib")
+else
+  add_links("ps2000")
+end
+add_packages("imgui", "opengl", "implot", "fftw")
+set_languages("c++20")
 
 --
 -- If you want to known more usage about xmake, please see https://xmake.io
@@ -82,4 +87,3 @@ target("imgui-test")
 --
 -- @endcode
 --
-
