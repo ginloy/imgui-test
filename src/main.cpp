@@ -220,13 +220,12 @@ int main(int, char **) {
   scope.openScope();
 
   if (scope.isOpen()) {
-    scope.startFreqSweep(20.0, 500.0, 2.0, 1, PS2000_UPDOWN, 5.0);
 
     scope.setStreamingMode(true);
     scope.setVoltageRange(PS2000_5V);
     std::cout << scope.getSampleRate() << std::endl;
 
-    std::this_thread::sleep_for(std::chrono::seconds(5));
+    scope.startFreqSweep(0, 50, 2.0, 10, 30, PS2000_UP);
     scope.startStream();
 
     auto start = std::chrono::high_resolution_clock::now();

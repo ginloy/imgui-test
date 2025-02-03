@@ -1,11 +1,11 @@
 #ifndef PICO_HPP
 #define PICO_HPP
 
+#include "libps2000/ps2000.h"
 #include <atomic>
 #include <mutex>
 #include <thread>
 #include <vector>
-#include "libps2000/ps2000.h"
 
 #define DEFAULT_VOLTAGE_RANGE PS2000_10V
 #define SAMPLE_INTERVAL 20
@@ -74,8 +74,8 @@ public:
   void stopStream();
 
   void startNoise();
-  bool startFreqSweep(double start, double end, double pkToPkV,
-                           uint32_t sweeps, PS2000_SWEEP_TYPE sweepType, double duration);
+  bool startFreqSweep(double start, double end, double pkToPkV, uint32_t sweeps,
+                      double sweepDuration, PS2000_SWEEP_TYPE sweepType);
   void stopSigGen();
 
   const Channel &getChannelA() const;

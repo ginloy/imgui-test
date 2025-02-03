@@ -195,16 +195,16 @@ void Scope::unlockChannels() {
 void Scope::startNoise() {}
 
 bool Scope::startFreqSweep(double start, double end, double pkToPkV,
-                           uint32_t sweeps, PS2000_SWEEP_TYPE sweepType,
-                           double duration) {
+                           uint32_t sweeps, double sweepDuration,
+                           PS2000_SWEEP_TYPE sweepType) {
 
   uint32_t pkToPkMicroV = pkToPkV * 1e6;
   double range = end - start;
-  double increments = duration / DWELL_TIME;
-  float increment = range / increments;
-  auto success = ps2000_set_sig_gen_built_in(handle, 0, pkToPkMicroV, PS2000_SINE,
-                                         start, end, increment, DWELL_TIME,
-                                         sweepType, sweeps);
+  double incrementsPerSweep = sweepDuration / DWELL_TIME;
+  float increment = range / incrementsPerSweep;
+  auto success = ps2000_set_sig_gen_built_in(handle, 0, pkToPkMicroV,
+                                             PS2000_SINE, start, end, increment,
+                                             DWELL_TIME, sweepType, sweeps);
 
   if (success) {
     generating = true;
