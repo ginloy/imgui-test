@@ -6,6 +6,7 @@ ps2000/
 .direnv
 .envrc
 compile_commands.json
+makefile
 
 # MacOS Cache
 .DS_Store
