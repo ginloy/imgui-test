@@ -1,7 +1,6 @@
 #ifndef MPSC_HPP
 #define MPSC_HPP
 
-#include <atomic>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -13,13 +12,12 @@ class mpsc {
   explicit mpsc() = delete;
 
   template <typename T> struct Data {
-    std::atomic<bool> closed;
     std::queue<T> queue;
     std::mutex lock;
     std::counting_semaphore<> sem;
 
     explicit Data()
-        : closed(false), queue(std::queue<T>{}), lock(std::mutex{}),
+        : queue(std::queue<T>{}), lock(std::mutex{}),
           sem(std::counting_semaphore<>{0}) {}
   };
 
@@ -27,7 +25,7 @@ public:
   template <typename T> class Send {
     friend class mpsc;
 
-    std::shared_ptr<Data<T>> data;
+    std::weak_ptr<Data<T>> data;
 
     Send() = delete;
     Send(const std::shared_ptr<Data<T>> &data) : data(data) {}
@@ -35,12 +33,13 @@ public:
   public:
     template <typename U>
     bool send(U &&res) {
-      std::unique_lock temp{data->lock};
-      if (data->closed) {
+      if (data.expired()) {
         return false;
       }
-      data->queue.push(std::forward<U>(res));
-      data->sem.release();
+      Data<T> &data = *(this->data.lock());
+      std::unique_lock temp{data.lock};
+      data.queue.push(std::forward<U>(res));
+      data.sem.release();
       return true;
     }
   };
@@ -53,25 +52,22 @@ public:
     Recv() = delete;
     Recv(const Recv<T> &other) = delete;
 
-    Recv(std::shared_ptr<Data<T>> &data) : data(data) {}
+    Recv(std::shared_ptr<Data<T>> &&data) : data(std::move(data)) {}
+    Recv(const std::shared_ptr<Data<T>> &data) : data(data) {}
 
   public:
-    Recv(Recv<T> &&other) : data(other.data) { other.data.reset(); }
-    ~Recv() {
-      if (data != nullptr) {
-        std::unique_lock temp{data->lock};
-        data->closed = true;
-      }
-    }
+    Recv(Recv<T> &&other) : data(std::move(other.data)) {}
 
     void close() {
-      std::unique_lock temp{data->lock};
-      data->closed = true;
+      data.reset();
     }
 
     Send<T> get_new_send() { return Send<T>{data}; }
 
     std::optional<T> recv() {
+      if (!data) {
+        return std::nullopt;
+      }
       data->sem.acquire();
       std::unique_lock temp{data->lock};
       T res = std::move(data->queue.front());
@@ -80,6 +76,9 @@ public:
     }
 
     std::optional<T> try_recv() {
+      if (!data) {
+        return std::nullopt;
+      }
       if (data->sem.try_acquire()) {
         std::unique_lock temp{data->lock};
         T res = std::move(data->queue.front());
@@ -92,6 +91,9 @@ public:
 
     std::vector<T> flush() {
       std::vector<T> res;
+      if (!data) {
+        return res;
+      }
       std::unique_lock temp{data->lock};
       while (data->sem.try_acquire()) {
         res.push_back(std::move(data->queue.front()));

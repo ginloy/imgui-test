@@ -211,22 +211,25 @@ TEST(MpscTest, CloseChannel) {
     EXPECT_TRUE(sender.send(1));
     EXPECT_TRUE(sender.send(2));
     EXPECT_TRUE(sender.send(3));
+    EXPECT_TRUE(sender.send(4));
 
+    auto v1 = receiver.try_recv();
+    auto v2 = receiver.try_recv();
+    auto v3 = receiver.try_recv();
     // Close from consumer side
     receiver.close();
 
     // Now, further sends should fail
     EXPECT_FALSE(sender.send(999));
 
-    // But we can still receive the items that were already in the queue
-    auto v1 = receiver.try_recv();
-    auto v2 = receiver.try_recv();
-    auto v3 = receiver.try_recv();
+    // We can no longer access items in the queue
     auto v4 = receiver.try_recv();  // No more items
+    auto v5 = receiver.try_recv();
     EXPECT_TRUE(v1.has_value());
     EXPECT_TRUE(v2.has_value());
     EXPECT_TRUE(v3.has_value());
     EXPECT_FALSE(v4.has_value());
+    EXPECT_FALSE(v5.has_value());
     EXPECT_EQ(v1.value(), 1);
     EXPECT_EQ(v2.value(), 2);
     EXPECT_EQ(v3.value(), 3);
