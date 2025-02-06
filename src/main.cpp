@@ -12,6 +12,7 @@
 #include "libps2000/ps2000.h"
 #include "pico.hpp"
 #include "processing.hpp"
+#include "range/v3/view/all.hpp"
 
 #include <chrono>
 #include <cmath>
@@ -223,27 +224,27 @@ int main(int, char **) {
     scope.setStreamingMode(true);
     scope.setVoltageRange(PS2000_5V);
 
-    scope.startStream();
-    scope.startNoise(2.0);
-
+    auto recv = scope.startStream().value();
     auto start = std::chrono::high_resolution_clock::now();
-    size_t idx = 0;
-    const auto &ch = scope.getChannelA();
+    scope.startFreqSweep(1, 20, 2, 0, 10, PS2000_UP);
+    // scope.startNoise(2.0);
+
+    size_t samples = 0;
     while (std::chrono::high_resolution_clock::now() - start <
-           std::chrono::seconds(20)) {
-      scope.lockChannels();
-      for (; idx < ch.data.size(); idx += 1000) {
-        printf("\r%.3f V", ch.data[idx]);
-        fflush(stdout);
+           std::chrono::seconds(10)) {
+      auto res = recv.flush();
+      for (const auto &e : res) {
+        samples += e.dataA.size();
+        for (auto p : e.dataA) {
+          printf("%.3f\n", p);
+        }
       }
-      scope.unlockChannels();
     }
-    printf("\n");
     scope.stopStream();
     scope.stopSigGen();
 
     auto timeTaken = std::chrono::high_resolution_clock::now() - start;
-    printf("%zu samples in %ld seconds\n", scope.getChannelA().data.size(),
+    printf("%zu samples in %lld seconds\n", samples,
            std::chrono::duration_cast<std::chrono::seconds>(timeTaken).count());
   }
 
