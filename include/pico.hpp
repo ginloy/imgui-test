@@ -62,9 +62,11 @@ class Scope {
   enPS2000Range voltageRange = DEFAULT_VOLTAGE_RANGE;
 
   void restartStream(bool settingsChanged = true);
-public:
   Scope();
   ~Scope();
+
+public:
+  static Scope &getInstance();
 
   bool openScope();
   bool isOpen();

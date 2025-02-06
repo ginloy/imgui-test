@@ -74,6 +74,11 @@ std::array<uint8_t, AWG_BUF_SIZE> getNoiseWaveform() {
   return buffer;
 }
 
+Scope &Scope::getInstance() {
+  static Scope scope;
+  return scope;
+}
+
 Scope::Scope() {}
 Scope::~Scope() {
   if (isStreaming()) {
@@ -199,7 +204,6 @@ void Scope::stopStream() {
     streamTask.join();
     ps2000_stop(handle);
   }
-
 }
 
 bool Scope::startNoise(double pkToPkV) {
