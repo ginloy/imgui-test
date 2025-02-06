@@ -6,22 +6,22 @@
 // + read the top of imgui.cpp. Read online:
 // https://github.com/ocornut/imgui/tree/master/docs
 
-#include <chrono>
 #define _USE_MATH_DEFINES
-#include "libps2000/ps2000.h"
 
 #include "globals.hpp"
-#include "imgui.h"
-#include "imgui_impl_glfw.h"
-#include "imgui_impl_opengl3.h"
-#include "implot.h"
+#include "libps2000/ps2000.h"
 #include "pico.hpp"
 #include "processing.hpp"
+
+#include <chrono>
 #include <cmath>
 #include <complex>
+#include <cstdio>
 #include <cstring>
-#include <iostream>
-#include <stdio.h>
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
+#include <implot.h>
 #include <string>
 #include <vector>
 #if defined(IMGUI_IMPL_OPENGL_ES2)
@@ -222,7 +222,6 @@ int main(int, char **) {
 
     scope.setStreamingMode(true);
     scope.setVoltageRange(PS2000_5V);
-    std::cout << scope.getSampleRate() << std::endl;
 
     scope.startStream();
     scope.startNoise(2.0);
@@ -234,10 +233,12 @@ int main(int, char **) {
            std::chrono::seconds(20)) {
       scope.lockChannels();
       for (; idx < ch.data.size(); idx += 1000) {
-        printf("%.3f V\n", ch.data[idx]);
+        printf("\r%.3f V", ch.data[idx]);
+        fflush(stdout);
       }
       scope.unlockChannels();
     }
+    printf("\n");
     scope.stopStream();
     scope.stopSigGen();
 

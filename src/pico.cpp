@@ -1,17 +1,23 @@
 #include "pico.hpp"
 
 #include "libps2000/ps2000.h"
+
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 
 #define TRUE 1
 #define FALSE 0
 
+namespace {
 std::vector<double> *channelAData = nullptr;
 std::vector<double> *channelBData = nullptr;
 std::mutex *channelALock = nullptr;
 std::mutex *channelBLock = nullptr;
 enPS2000Range voltageRangeGlob = DEFAULT_VOLTAGE_RANGE;
+} // namespace
 
 std::array<uint8_t, AWG_BUF_SIZE> getNoiseWaveform() {
   std::array<uint8_t, AWG_BUF_SIZE> buffer;
@@ -88,7 +94,7 @@ void streamCallback(int16_t **overviewBuffers, int16_t overflow,
 Scope::Scope() {}
 Scope::~Scope() {
   if (streaming) {
-    ps2000_stop(handle);
+    stopStream();
   }
 
   if (open) {
@@ -102,13 +108,14 @@ Scope::~Scope() {
   voltageRangeGlob = DEFAULT_VOLTAGE_RANGE;
 }
 
-void Scope::openScope() {
+bool Scope::openScope() {
   auto res = ps2000_open_unit();
   if (res <= 0) {
-    return;
+    return false;
   }
   handle = res;
   open = true;
+  return true;
 }
 
 bool Scope::isOpen() const { return open; }
@@ -159,7 +166,7 @@ bool Scope::startStream() {
   ps2000_set_channel(handle, PS2000_CHANNEL_B, TRUE, dc, voltageRange);
   ps2000_set_trigger(handle, PS2000_NONE, 0, PS2000_RISING, 0, 0);
   auto started = ps2000_run_streaming_ns(handle, SAMPLE_INTERVAL, TIME_UNITS,
-                                         getSampleRate() * 10., FALSE, 1, 1e6);
+                                         SAMPLE_RATE * 10., FALSE, 1, 1e6);
   if (!started) {
     return false;
   }
@@ -208,11 +215,11 @@ bool Scope::startNoise(double pkToPkV) {
     stopStream();
     restartStream = true;
   }
-  auto waveForm = getNoiseWaveform();
-  auto deltaPhase = SAMPLE_RATE / 4096 * waveForm.size() / 48e6 * pow(2, 32);
+  uint8_t buf[NOISE_WAVEFORM.size()];
+  std::copy(NOISE_WAVEFORM.cbegin(), NOISE_WAVEFORM.cend(), buf);
   auto success = ps2000_set_sig_gen_arbitrary(
-      handle, 0, pkToPkV * 1e6, DELTA_PHASE, DELTA_PHASE, 0, 1, waveForm.data(),
-      waveForm.size(), PS2000_UP, 0);
+      handle, 0, pkToPkV * 1e6, DELTA_PHASE, DELTA_PHASE, 0, 1, buf,
+      NOISE_WAVEFORM.size(), PS2000_UP, 0);
   if (restartStream) {
     startStream();
   }
@@ -252,7 +259,15 @@ bool Scope::startFreqSweep(double start, double end, double pkToPkV,
 }
 
 void Scope::stopSigGen() {
+  bool restartStream = false;
+  if (streaming) {
+    stopStream();
+    restartStream = true;
+  }
   ps2000_set_sig_gen_built_in(handle, 0, 0, PS2000_DC_VOLTAGE, 0, 0, 0, 0,
                               PS2000_UP, 0);
+  if (restartStream) {
+    startStream();
+  }
   generating = false;
 }
