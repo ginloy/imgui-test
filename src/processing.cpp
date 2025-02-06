@@ -1,7 +1,10 @@
 #include "processing.hpp"
 #include "fftw3.h"
 
-std::vector<std::complex<double>> fft(std::vector<double> &input) {
+#include <ranges>
+#include<range/v3/all.hpp>
+
+std::vector<std::complex<double>> fft(const std::vector<double> &input) {
 
   const size_t N = input.size();
   const size_t N_out = N / 2 + 1;
@@ -16,14 +19,12 @@ std::vector<std::complex<double>> fft(std::vector<double> &input) {
 
   fftw_execute(p);
 
-  std::vector<std::complex<double>> result(N_out);
-  for (size_t i = 0; i < N_out; ++i) {
-    result[i] = std::complex<double>(out[i][0] / N, out[i][1] / N);
-  }
-
-  for (size_t i = 1; i < N_out - 1; ++i) {
-    result[i] *= 2;
-  }
+  auto outComplex = std::ranges::subrange(out, out + N_out) |
+               std::views::transform([N](const auto &e) {
+                 return std::complex<double>{e[0] / N, e[1] / N};
+               });
+  auto normalized = outComplex | std::views::drop(1) | std::views::transform([](const auto &e) {return 2. * e;});
+  std::vector<std::complex<double>> result = ranges::views::concat(outComplex | ranges::views::take(1), normalized) | ranges::to_vector;
 
   fftw_destroy_plan(p);
   fftw_free(in);
