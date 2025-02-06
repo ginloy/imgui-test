@@ -10,6 +10,7 @@ in
       ninja
       cmake
       pkg-config
+      linuxPackages_latest.perf
     ];
 
     buildInputs = with pkgs; [
@@ -17,5 +18,7 @@ in
       imgui
       implot
       libps2000
+      gtest
+      range-v3
     ];
   }
