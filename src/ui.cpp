@@ -122,6 +122,9 @@ ImVec2 to_limits(enPS2000Range range) {
 } // namespace
 
 void drawScope(ScopeSettings &settings, Scope &scope) {
+  namespace sr = std::ranges;
+  namespace sv = std::views;
+
   static uint32_t frame = 0;
   ++frame;
 
@@ -131,7 +134,7 @@ void drawScope(ScopeSettings &settings, Scope &scope) {
 
   if (settings.recv.has_value()) {
     auto res = settings.recv->flush();
-    std::ranges::for_each(res, [&settings](const auto &e) {
+    sr::for_each(res, [&settings](const auto &e) {
       settings.dataA.append_range(e.dataA);
       settings.dataB.append_range(e.dataB);
     });
@@ -170,35 +173,32 @@ void drawScope(ScopeSettings &settings, Scope &scope) {
     })();
 
     const auto range = settings.limits.X.Max - settings.limits.X.Min;
-    auto times = std::views::iota(0) | std::views::take(PLOT_SAMPLES) |
-                 std::views::transform([range, &settings](auto i) {
+    auto times = sv::iota(0) | sv::take(PLOT_SAMPLES) |
+                 sv::transform([range, &settings](auto i) {
                    return i / 1000. * range + settings.limits.X.Min;
                  });
-    auto vals = times | std::views::transform([range, &settings](auto t) {
-                     int64_t idx = std::round(t / to_scale(settings.timebase) /
-                                              DELTA_TIME);
-                     return std::pair{t, idx};
-                   }) |
-                   std::views::filter([&data](auto pair) {
-                     return pair.second >= 0 && pair.second < data.size();
-                   }) |
-                   std::views::transform([&data, &settings](auto pair) {
-                     auto &&[t, i] = pair;
-                     double val = data[i] * to_scale(settings.voltageRange);
-                     return std::pair{t, val};
-                   });
+    auto vals = times | sv::transform([range, &settings](auto t) {
+                  int64_t idx =
+                      std::round(t / to_scale(settings.timebase) / DELTA_TIME);
+                  return std::pair{t, idx};
+                }) |
+                sv::filter([&data](auto pair) {
+                  return pair.second >= 0 && pair.second < data.size();
+                }) |
+                sv::transform([&data, &settings](auto pair) {
+                  auto &&[t, i] = pair;
+                  double val = data[i] * to_scale(settings.voltageRange);
+                  return std::pair{t, val};
+                });
 
-    auto xs =
-        vals |
-        std::views::transform([](const auto &pair) { return pair.first; }) |
-        std::ranges::to<std::vector<double>>();
-    auto ys =
-        vals |
-        std::views::transform([](const auto &pair) { return pair.second; }) |
-        std::ranges::to<std::vector<double>>();
+    auto xs = vals |
+              sv::transform([](const auto &pair) { return pair.first; }) |
+              sr::to<std::vector<double>>();
+    auto ys = vals |
+              sv::transform([](const auto &pair) { return pair.second; }) |
+              sr::to<std::vector<double>>();
 
     ImPlot::PlotLine(name.c_str(), xs.data(), ys.data(), xs.size());
     ImPlot::EndPlot();
   }
-
 }
