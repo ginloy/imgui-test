@@ -1,22 +1,36 @@
 add_rules("mode.debug", "mode.release")
 
 add_requires("imgui", { configs = { glfw_opengl3 = true } })
-add_requires("opengl", "implot", "fftw")
+add_requires("gtest", { configs = { main = true } })
+add_requires("opengl", "implot", "fftw", "range-v3")
+
+set_languages("c++23")
+
 target("imgui-test")
-set_kind("binary")
-add_files("src/*.cpp")
-add_includedirs("include")
-if is_os("windows") then
-  add_includedirs(".")
-  add_linkdirs("libps2000")
-end
-if is_os("macosx") then
-  add_includedirs("/Library/Frameworks/PicoSDK.framework/Headers")
-  add_linkdirs("/Library/Frameworks/PicoSDK.framework/Libraries/libps2000")
-end
-add_links("ps2000")
-add_packages("imgui", "opengl", "implot", "fftw")
-set_languages("c++20")
+  set_kind("binary")
+  add_files("src/*.cpp")
+  add_includedirs("include", "mpsc")
+  if is_os("windows") then
+    add_includedirs(".")
+    add_linkdirs("libps2000")
+  end
+  if is_os("macosx") then
+    add_includedirs("/Library/Frameworks/PicoSDK.framework/Headers")
+    add_linkdirs("/Library/Frameworks/PicoSDK.framework/Libraries/libps2000")
+  end
+  add_links("ps2000")
+  add_packages("imgui", "opengl", "implot", "fftw", "range-v3")
+target_end()
+
+target("tests")
+  set_kind("binary")
+  set_default(false)
+  add_files("mpsc/test.cpp")
+  add_tests("default")
+  add_includedirs("mpsc")
+  add_packages("gtest")
+  -- add_syslinks("gtest_main")
+target_end()
 
 --
 -- If you want to known more usage about xmake, please see https://xmake.io
