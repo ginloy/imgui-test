@@ -2,10 +2,10 @@
 #define PICO_HPP
 
 #include "libps2000/ps2000.h"
+#include "mpsc.hpp"
 
 #include <array>
 #include <atomic>
-#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -45,11 +45,9 @@ std::array<uint8_t, AWG_BUF_SIZE> getNoiseWaveform();
 inline const std::array<uint8_t, AWG_BUF_SIZE> NOISE_WAVEFORM =
     getNoiseWaveform();
 
-struct Channel {
-  std::vector<double> data;
-
-  // Data needs to be accessed across threads
-  std::mutex dataLock;
+struct StreamResult {
+  std::vector<double> dataA;
+  std::vector<double> dataB;
 };
 
 class Scope {
@@ -59,37 +57,29 @@ class Scope {
   std::atomic<bool> streaming = false;
   bool generating = false;
   std::thread streamTask;
-  bool dc = false;
+  bool dc = true;
 
   enPS2000Range voltageRange = DEFAULT_VOLTAGE_RANGE;
-  Channel channelA;
-  Channel channelB;
 
+  void restartStream(bool settingsChanged = true);
 public:
   Scope();
   ~Scope();
 
   bool openScope();
-  bool isOpen() const;
-  bool isStreaming() const;
-  bool isGenerating() const;
+  bool isOpen();
+  bool isStreaming();
+  bool isGenerating();
 
   void setVoltageRange(enPS2000Range range);
   void setStreamingMode(bool dc);
-  bool startStream();
+  std::optional<mpsc::Recv<StreamResult>> startStream();
   void stopStream();
 
   bool startNoise(double pkToPkV);
   bool startFreqSweep(double start, double end, double pkToPkV, uint32_t sweeps,
                       double sweepDuration, PS2000_SWEEP_TYPE sweepType);
   void stopSigGen();
-
-  const Channel &getChannelA() const;
-  const Channel &getChannelB() const;
-  void lockChannels();
-  void unlockChannels();
-
-  void clearData();
 
   // Scope object cannot be copied
   Scope(const Scope &other) = delete;

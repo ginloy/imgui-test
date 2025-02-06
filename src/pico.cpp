@@ -1,22 +1,68 @@
 #include "pico.hpp"
-
-#include "libps2000/ps2000.h"
+#include "mpsc.hpp"
 
 #include <algorithm>
-#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <libps2000/ps2000.h>
+#include <range/v3/all.hpp>
 
 #define TRUE 1
 #define FALSE 0
 
 namespace {
-std::vector<double> *channelAData = nullptr;
-std::vector<double> *channelBData = nullptr;
-std::mutex *channelALock = nullptr;
-std::mutex *channelBLock = nullptr;
+std::optional<mpsc::Send<StreamResult>> streamSender;
 enPS2000Range voltageRangeGlob = DEFAULT_VOLTAGE_RANGE;
+std::mutex globalLock;
+
+double toVolts(enPS2000Range range);
+
+auto callback = [](int16_t **overviewBuffers, int16_t overflow,
+                   uint32_t triggeredAt, int16_t triggered, int16_t auto_stop,
+                   uint32_t nValues) {
+  std::unique_lock temp{globalLock};
+  if (!streamSender.has_value()) {
+    return;
+  }
+  auto f = ranges::views::transform([](const int16_t &e) -> double {
+    return (double)e / (double)PS2000_MAX_VALUE * toVolts(voltageRangeGlob);
+  });
+  auto rangeA =
+      ranges::make_subrange(overviewBuffers[0], overviewBuffers[0] + nValues) |
+      f;
+  auto rangeB =
+      ranges::make_subrange(overviewBuffers[2], overviewBuffers[2] + nValues) |
+      f;
+
+  streamSender.value().send(
+      StreamResult{rangeA | ranges::to_vector, rangeB | ranges::to_vector});
+};
+
+double toVolts(enPS2000Range range) {
+  switch (range) {
+  case PS2000_50MV:
+    return 50. / 1000.;
+  case PS2000_100MV:
+    return 100. / 1000.;
+  case PS2000_200MV:
+    return 200. / 1000.;
+  case PS2000_500MV:
+    return 500. / 1000.;
+  case PS2000_1V:
+    return 1.;
+  case PS2000_2V:
+    return 2.;
+  case PS2000_5V:
+    return 5.;
+  case PS2000_10V:
+    return 10.;
+  case PS2000_20V:
+    return 20.;
+  default:
+    return 0.;
+  }
+}
 } // namespace
 
 std::array<uint8_t, AWG_BUF_SIZE> getNoiseWaveform() {
@@ -28,84 +74,15 @@ std::array<uint8_t, AWG_BUF_SIZE> getNoiseWaveform() {
   return buffer;
 }
 
-void streamCallback(int16_t **overviewBuffers, int16_t overflow,
-                    uint32_t triggeredAt, int16_t triggered, int16_t auto_stop,
-                    uint32_t nValues) {
-  if (nValues <= 0) {
-    return;
-  }
-
-  double maxVoltage;
-  switch (voltageRangeGlob) {
-  case PS2000_50MV:
-    maxVoltage = 50. / 1000.;
-    break;
-  case PS2000_100MV:
-    maxVoltage = 100. / 1000.;
-    break;
-  case PS2000_200MV:
-    maxVoltage = 200. / 1000.;
-    break;
-  case PS2000_500MV:
-    maxVoltage = 500. / 1000.;
-    break;
-  case PS2000_1V:
-    maxVoltage = 1.;
-    break;
-  case PS2000_2V:
-    maxVoltage = 2.;
-    break;
-  case PS2000_5V:
-    maxVoltage = 5.;
-    break;
-  case PS2000_10V:
-    maxVoltage = 10.;
-    break;
-  case PS2000_20V:
-    maxVoltage = 20.;
-    break;
-  default:
-    return;
-  }
-
-  channelALock->lock();
-  channelBLock->lock();
-
-  for (auto i = 0; i < nValues; ++i) {
-    auto chAMax =
-        (double)overviewBuffers[0][i] / (double)PS2000_MAX_VALUE * maxVoltage;
-    auto chAMin =
-        (double)overviewBuffers[1][i] / (double)PS2000_MAX_VALUE * maxVoltage;
-    auto chBMax =
-        (double)overviewBuffers[2][i] / (double)PS2000_MAX_VALUE * maxVoltage;
-    auto chBMin =
-        (double)overviewBuffers[3][i] / (double)PS2000_MAX_VALUE * maxVoltage;
-    if (chAMax != chAMin || chBMax != chBMin) {
-      printf("test\n");
-    }
-    channelAData->push_back(chAMax);
-    channelBData->push_back(chBMax);
-  }
-
-  channelALock->unlock();
-  channelBLock->unlock();
-}
-
 Scope::Scope() {}
 Scope::~Scope() {
-  if (streaming) {
+  if (isStreaming()) {
     stopStream();
   }
 
-  if (open) {
+  if (isOpen()) {
     ps2000_close_unit(handle);
   }
-
-  channelAData = nullptr;
-  channelBData = nullptr;
-  channelALock = nullptr;
-  channelBLock = nullptr;
-  voltageRangeGlob = DEFAULT_VOLTAGE_RANGE;
 }
 
 bool Scope::openScope() {
@@ -118,28 +95,34 @@ bool Scope::openScope() {
   return true;
 }
 
-bool Scope::isOpen() const { return open; }
-bool Scope::isStreaming() const { return streaming; }
-bool Scope::isGenerating() const { return generating; }
+bool Scope::isOpen() {
+  if (open) {
+    auto res = ps2000PingUnit(handle);
+    if (res == 0) {
+      open = false;
+    }
+  }
+  return open;
+}
 
-void Scope::clearData() {
-  channelA.dataLock.lock();
-  channelB.dataLock.lock();
-
-  channelA.data.clear();
-  channelB.data.clear();
-
-  channelA.dataLock.unlock();
-  channelB.dataLock.unlock();
+bool Scope::isStreaming() {
+  if (streaming && !isOpen()) {
+    stopStream();
+  }
+  return streaming;
+}
+bool Scope::isGenerating() {
+  if (generating && !isOpen()) {
+    generating = false;
+  }
+  return generating;
 }
 
 void Scope::setVoltageRange(enPS2000Range range) {
   auto prevRange = voltageRange;
   voltageRange = range;
-  voltageRangeGlob = range;
   if (streaming && prevRange != range) {
-    stopStream();
-    startStream();
+    restartStream();
   }
 }
 
@@ -147,40 +130,67 @@ void Scope::setStreamingMode(bool dc) {
   auto prev = this->dc;
   this->dc = dc;
   if (streaming && prev != dc) {
-    stopStream();
-    startStream();
+    restartStream();
   }
 }
 
-bool Scope::startStream() {
-  if (streaming) {
-    return true;
+void Scope::restartStream(bool settingsChanged) {
+  std::unique_lock temp{globalLock};
+  if (!streamSender.has_value()) {
+    return;
   }
-  voltageRangeGlob = voltageRange;
-  channelAData = &channelA.data;
-  channelBData = &channelB.data;
-  channelALock = &channelA.dataLock;
-  channelBLock = &channelB.dataLock;
 
+  if (settingsChanged) {
+    ps2000_set_channel(handle, PS2000_CHANNEL_A, TRUE, dc, voltageRange);
+    ps2000_set_channel(handle, PS2000_CHANNEL_B, TRUE, dc, voltageRange);
+    ps2000_set_trigger(handle, PS2000_NONE, 0, PS2000_RISING, 0, 0);
+  }
+
+  ps2000_run_streaming_ns(handle, SAMPLE_INTERVAL, TIME_UNITS, SAMPLE_RATE * 10,
+                          FALSE, 1, 1e6);
+  streaming = true;
+  auto &streaming = this->streaming;
+  auto f = [handle = handle, &streaming]() mutable {
+    while (streaming) {
+      ps2000_get_streaming_last_values(handle, callback);
+    }
+  };
+  streamTask = std::thread{f};
+}
+
+std::optional<mpsc::Recv<StreamResult>> Scope::startStream() {
+  if (streaming) {
+    stopStream();
+  }
   ps2000_set_channel(handle, PS2000_CHANNEL_A, TRUE, dc, voltageRange);
   ps2000_set_channel(handle, PS2000_CHANNEL_B, TRUE, dc, voltageRange);
   ps2000_set_trigger(handle, PS2000_NONE, 0, PS2000_RISING, 0, 0);
   auto started = ps2000_run_streaming_ns(handle, SAMPLE_INTERVAL, TIME_UNITS,
                                          SAMPLE_RATE * 10., FALSE, 1, 1e6);
   if (!started) {
-    return false;
+    return std::nullopt;
   }
 
+  auto [send, recv] = mpsc::make<StreamResult>();
   streaming = true;
-  auto f = [](int16_t handle, std::atomic<bool> &streaming) {
+
+  {
+    std::unique_lock temp{globalLock};
+    voltageRangeGlob = voltageRange;
+    streamSender.emplace(std::move(send));
+  }
+
+  auto range = voltageRange;
+  auto &streaming = this->streaming;
+  auto f = [handle = handle, &streaming]() mutable {
     while (streaming) {
-      ps2000_get_streaming_last_values(handle, streamCallback);
+      ps2000_get_streaming_last_values(handle, callback);
     }
   };
 
-  streamTask = std::thread(f, handle, std::ref(streaming));
+  streamTask = std::thread{f};
 
-  return true;
+  return {std::move(recv)};
 }
 
 void Scope::stopStream() {
@@ -190,23 +200,6 @@ void Scope::stopStream() {
     ps2000_stop(handle);
   }
 
-  channelAData = nullptr;
-  channelBData = nullptr;
-  channelALock = nullptr;
-  channelBLock = nullptr;
-}
-
-const Channel &Scope::getChannelA() const { return channelA; }
-const Channel &Scope::getChannelB() const { return channelB; }
-
-void Scope::lockChannels() {
-  channelA.dataLock.lock();
-  channelB.dataLock.lock();
-}
-
-void Scope::unlockChannels() {
-  channelA.dataLock.unlock();
-  channelB.dataLock.unlock();
 }
 
 bool Scope::startNoise(double pkToPkV) {
@@ -221,7 +214,7 @@ bool Scope::startNoise(double pkToPkV) {
       handle, 0, pkToPkV * 1e6, DELTA_PHASE, DELTA_PHASE, 0, 1, buf,
       NOISE_WAVEFORM.size(), PS2000_UP, 0);
   if (restartStream) {
-    startStream();
+    this->restartStream(false);
   }
   if (success) {
     printf("Success\n");
@@ -249,7 +242,7 @@ bool Scope::startFreqSweep(double start, double end, double pkToPkV,
                                              DWELL_TIME, sweepType, sweeps);
 
   if (restartStream) {
-    startStream();
+    this->restartStream(false);
   }
   if (success) {
     generating = true;
@@ -267,7 +260,7 @@ void Scope::stopSigGen() {
   ps2000_set_sig_gen_built_in(handle, 0, 0, PS2000_DC_VOLTAGE, 0, 0, 0, 0,
                               PS2000_UP, 0);
   if (restartStream) {
-    startStream();
+    this->restartStream(false);
   }
   generating = false;
 }
