@@ -2,19 +2,20 @@
 #define PICO_HPP
 
 #include "libps2000/ps2000.h"
+
+#include <array>
 #include <atomic>
 #include <mutex>
 #include <thread>
 #include <vector>
 
-#define DEFAULT_VOLTAGE_RANGE PS2000_10V
-#define SAMPLE_INTERVAL 20
-#define TIME_UNITS PS2000_US
+inline constexpr enPS2000Range DEFAULT_VOLTAGE_RANGE = PS2000_10V;
+inline constexpr enPS2000TimeUnits TIME_UNITS = PS2000_US;
+inline constexpr double DWELL_TIME = 0.02;
+inline constexpr size_t SAMPLE_INTERVAL = 20;
 
-constexpr double DWELL_TIME = 0.02;
-
-constexpr double timeUnitToSecs(enPS2000TimeUnits unit) {
-  switch (unit) {
+constexpr double timeUnitToSecs() {
+  switch (TIME_UNITS) {
   case PS2000_FS:
     return 1.0 / 1e15;
   case PS2000_PS:
@@ -31,16 +32,18 @@ constexpr double timeUnitToSecs(enPS2000TimeUnits unit) {
     return 1.0;
   }
 }
-constexpr double DELTA_TIME = timeUnitToSecs(TIME_UNITS) * SAMPLE_INTERVAL;
-constexpr double SAMPLE_RATE = 1. / DELTA_TIME;
-constexpr size_t WAVEFORM_SECONDS = 30;
-constexpr size_t PHASE_ACC_SIZE = 1UL << 32;
-constexpr size_t AWG_BUF_SIZE = 4096;
-constexpr size_t DDS_FREQ = 48e6;
-constexpr double DDS_PERIOD = 1. / DDS_FREQ;
-constexpr uint32_t DELTA_PHASE = SAMPLE_RATE / DDS_FREQ *  PHASE_ACC_SIZE;
-
+inline constexpr double DELTA_TIME = timeUnitToSecs() * SAMPLE_INTERVAL;
+inline constexpr double SAMPLE_RATE = 1. / DELTA_TIME;
+inline constexpr size_t OVERVIEW_BUFFER_SIZE = 1e6;
+inline constexpr size_t WAVEFORM_SECONDS = 30;
+inline constexpr size_t PHASE_ACC_SIZE = 1UL << 32;
+inline constexpr size_t AWG_BUF_SIZE = 4096;
+inline constexpr size_t DDS_FREQ = 48e6;
+inline constexpr double DDS_PERIOD = 1. / DDS_FREQ;
+inline constexpr uint32_t DELTA_PHASE = SAMPLE_RATE / DDS_FREQ * PHASE_ACC_SIZE;
 std::array<uint8_t, AWG_BUF_SIZE> getNoiseWaveform();
+inline const std::array<uint8_t, AWG_BUF_SIZE> NOISE_WAVEFORM =
+    getNoiseWaveform();
 
 struct Channel {
   std::vector<double> data;
@@ -66,17 +69,10 @@ public:
   Scope();
   ~Scope();
 
-  void openScope();
+  bool openScope();
   bool isOpen() const;
   bool isStreaming() const;
   bool isGenerating() const;
-
-  constexpr double getDeltaTime() const {
-    double unitInSecs = timeUnitToSecs(TIME_UNITS);
-    return SAMPLE_INTERVAL * unitInSecs;
-  }
-
-  constexpr double getSampleRate() const { return 1. / getDeltaTime(); }
 
   void setVoltageRange(enPS2000Range range);
   void setStreamingMode(bool dc);
