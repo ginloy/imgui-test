@@ -51,8 +51,8 @@ public:
 
     Recv() = delete;
 
-    Recv(std::shared_ptr<Data<T>> &&data) : data(std::move(data)) {}
-    Recv(const std::shared_ptr<Data<T>> &data) : data(data) {}
+    Recv(std::convertible_to<std::shared_ptr<Data<T>>> auto &&data)
+        : data(std::forward<decltype(data)>(data)) {}
 
   public:
     Recv(const Recv<T> &other) = delete;
