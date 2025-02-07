@@ -56,6 +56,10 @@ public:
   public:
     Recv(const Recv<T> &other) = delete;
     Recv(Recv<T> &&other) : data(std::move(other.data)) {}
+    Recv<T>& operator=(Recv<T> &&other) {
+      data = std::move(other.data);
+      return *this;
+    }
 
     void close() { data.reset(); }
 
