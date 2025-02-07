@@ -103,9 +103,9 @@ public:
 
   template <typename T> static std::pair<Send<T>, Recv<T>> make() {
     std::shared_ptr<Data<T>> data = std::make_shared<Data<T>>();
-    auto send = Send<T>{data};
-    auto recv = Recv<T>{data};
-    return {send, std::move(recv)};
+    Send<T> send{data};
+    Recv<T> recv{std::move(data)};
+    return {std::move(send), std::move(recv)};
   }
 };
 
