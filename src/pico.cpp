@@ -144,11 +144,15 @@ void Scope::restartStream(bool settingsChanged) {
   if (!streamSender.has_value()) {
     return;
   }
+  if (streaming) {
+    stopStream();
+  }
 
   if (settingsChanged) {
     ps2000_set_channel(handle, PS2000_CHANNEL_A, TRUE, dc, voltageRange);
     ps2000_set_channel(handle, PS2000_CHANNEL_B, TRUE, dc, voltageRange);
     ps2000_set_trigger(handle, PS2000_NONE, 0, PS2000_RISING, 0, 0);
+    voltageRangeGlob = voltageRange;
   }
 
   ps2000_run_streaming_ns(handle, SAMPLE_INTERVAL, TIME_UNITS, SAMPLE_RATE * 10,
@@ -185,7 +189,6 @@ std::optional<mpsc::Recv<StreamResult>> Scope::startStream() {
     streamSender.emplace(std::move(send));
   }
 
-  auto range = voltageRange;
   auto &streaming = this->streaming;
   auto f = [handle = handle, &streaming]() mutable {
     while (streaming) {
