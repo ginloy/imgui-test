@@ -11,11 +11,14 @@
 
 enum class TimeBase { US, MS, S };
 
+inline constexpr TimeBase DEFAULT_TIMEBASE = TimeBase::S;
+
 struct ScopeSettings {
   enPS2000Range voltageRange = DEFAULT_VOLTAGE_RANGE;
   TimeBase timebase = TimeBase::S;
   ImPlotRect limits = {0, 10, -10, 10};
   bool disableControls = false;
+  bool run = false;
   bool follow = false;
 
   std::optional<mpsc::Recv<StreamResult>> recv;
