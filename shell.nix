@@ -1,8 +1,8 @@
-{pkgs ? import <nixpkgs> {}}: let
+{stable ? import <nixpkgs> {}, pkgs? import <unstable> {}}: let
   libps2000Repo = builtins.fetchGit {
     url = "https://github.com/ginloy/libps2000";
   };
-  libps2000 = pkgs.callPackage libps2000Repo {};
+  libps2000 = stable.callPackage libps2000Repo {};
 in
   pkgs.mkShell {
     nativeBuildInputs = with pkgs; [

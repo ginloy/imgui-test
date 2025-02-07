@@ -1,6 +1,6 @@
 project('simple', 'cpp', default_options: ['cpp_std=c++20'])
 
-src = ['src/main.cpp', 'src/pico.cpp', 'src/processing.cpp']
+src = ['src/main.cpp', 'src/pico.cpp', 'src/processing.cpp', 'src/ui.cpp']
 includedirs = include_directories('include', 'mpsc')
 mpsc_inc = include_directories('mpsc')
 

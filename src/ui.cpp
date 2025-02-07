@@ -5,6 +5,7 @@
 #include <imgui.h>
 #include <implot.h>
 #include <libps2000/ps2000.h>
+#include <range/v3/all.hpp>
 #include <ranges>
 
 namespace {
@@ -135,8 +136,10 @@ void drawScope(ScopeSettings &settings, Scope &scope) {
   if (settings.recv.has_value()) {
     auto res = settings.recv->flush();
     sr::for_each(res, [&settings](const auto &e) {
-      settings.dataA.append_range(e.dataA);
-      settings.dataB.append_range(e.dataB);
+      sr::for_each(e.dataA,
+                   [&settings](const auto p) { settings.dataA.push_back(p); });
+      sr::for_each(e.dataB,
+                   [&settings](const auto p) { settings.dataB.push_back(p); });
     });
   }
 
@@ -177,7 +180,7 @@ void drawScope(ScopeSettings &settings, Scope &scope) {
                  sv::transform([range, &settings](auto i) {
                    return i / 1000. * range + settings.limits.X.Min;
                  });
-    auto vals = times | sv::transform([range, &settings](auto t) {
+    auto vals = times | sv::transform([&settings](auto t) {
                   int64_t idx =
                       std::round(t / to_scale(settings.timebase) / DELTA_TIME);
                   return std::pair{t, idx};
@@ -193,10 +196,10 @@ void drawScope(ScopeSettings &settings, Scope &scope) {
 
     auto xs = vals |
               sv::transform([](const auto &pair) { return pair.first; }) |
-              sr::to<std::vector<double>>();
+              ranges::to_vector;
     auto ys = vals |
               sv::transform([](const auto &pair) { return pair.second; }) |
-              sr::to<std::vector<double>>();
+              ranges::to_vector;
 
     ImPlot::PlotLine(name.c_str(), xs.data(), ys.data(), xs.size());
     ImPlot::EndPlot();
