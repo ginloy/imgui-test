@@ -1,6 +1,7 @@
 #ifndef MPSC_HPP
 #define MPSC_HPP
 
+#include <concepts>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -31,7 +32,7 @@ public:
     Send(const std::shared_ptr<Data<T>> &data) : data(data) {}
 
   public:
-    bool send(auto &&res) {
+    bool send(std::convertible_to<T> auto &&res) {
       using U = decltype(res);
       if (data.expired()) {
         return false;
@@ -43,7 +44,6 @@ public:
       return true;
     }
   };
-
 
   template <typename T> class Recv {
     friend class mpsc;
@@ -58,9 +58,7 @@ public:
   public:
     Recv(Recv<T> &&other) : data(std::move(other.data)) {}
 
-    void close() {
-      data.reset();
-    }
+    void close() { data.reset(); }
 
     Send<T> get_new_send() { return Send<T>{data}; }
 
