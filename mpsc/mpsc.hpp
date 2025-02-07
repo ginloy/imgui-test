@@ -50,12 +50,12 @@ public:
     std::shared_ptr<Data<T>> data;
 
     Recv() = delete;
-    Recv(const Recv<T> &other) = delete;
 
     Recv(std::shared_ptr<Data<T>> &&data) : data(std::move(data)) {}
     Recv(const std::shared_ptr<Data<T>> &data) : data(data) {}
 
   public:
+    Recv(const Recv<T> &other) = delete;
     Recv(Recv<T> &&other) : data(std::move(other.data)) {}
 
     void close() { data.reset(); }
