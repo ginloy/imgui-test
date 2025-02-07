@@ -31,8 +31,8 @@ public:
     Send(const std::shared_ptr<Data<T>> &data) : data(data) {}
 
   public:
-    template <typename U>
-    bool send(U &&res) {
+    bool send(auto &&res) {
+      using U = decltype(res);
       if (data.expired()) {
         return false;
       }
