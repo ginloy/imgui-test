@@ -7,9 +7,19 @@
 #include <libps2000/ps2000.h>
 #include <range/v3/all.hpp>
 #include <ranges>
+#include <iostream>
+
+namespace sr = std::ranges;
+namespace sv = std::views;
+namespace rv = ranges::views;
 
 namespace {
 constexpr size_t PLOT_SAMPLES = 100000;
+constexpr std::array SUPPORTED_RANGES = {
+    PS2000_1V,   PS2000_5V,    PS2000_10V,   PS2000_20V,  PS2000_20MV,
+    PS2000_50MV, PS2000_100MV, PS2000_200MV, PS2000_500MV};
+constexpr std::array SUPPORTED_TIMEBASES = {TimeBase::S, TimeBase::MS,
+                                            TimeBase::US};
 
 std::string to_string(TimeBase tb);
 std::string to_string(enPS2000Range range);
@@ -123,9 +133,6 @@ ImVec2 to_limits(enPS2000Range range) {
 } // namespace
 
 void drawScope(ScopeSettings &settings, Scope &scope) {
-  namespace sr = std::ranges;
-  namespace sv = std::views;
-
   static uint32_t frame = 0;
   ++frame;
 
@@ -134,8 +141,7 @@ void drawScope(ScopeSettings &settings, Scope &scope) {
   }
 
   if (settings.recv.has_value()) {
-    auto res = settings.recv->flush();
-    sr::for_each(res, [&settings](const auto &e) {
+    sr::for_each(settings.recv->flush(), [&settings](const auto &e) {
       sr::for_each(e.dataA,
                    [&settings](const auto p) { settings.dataA.push_back(p); });
       sr::for_each(e.dataB,
@@ -147,8 +153,9 @@ void drawScope(ScopeSettings &settings, Scope &scope) {
                     to_string(settings.voltageRange).c_str());
   auto vLimits = to_limits(settings.voltageRange);
   ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, vLimits.x, vLimits.y);
+  ImPlot::SetupAxisLimits(ImAxis_Y1, vLimits.x, vLimits.y);
   ImPlot::SetupAxisLimits(ImAxis_X1, settings.limits.X.Min,
-                          settings.limits.X.Min);
+                          settings.limits.X.Max);
 
   if (settings.follow && scope.isStreaming() && frame % 3 == 0) {
     double latest = DELTA_TIME *
@@ -156,7 +163,7 @@ void drawScope(ScopeSettings &settings, Scope &scope) {
                     to_scale(settings.timebase);
     if (latest > settings.limits.X.Max) {
       auto range = settings.limits.X.Max - settings.limits.X.Min;
-      ImPlot::SetupAxisLimits(ImAxis_Y1, latest - range, latest,
+      ImPlot::SetupAxisLimits(ImAxis_X1, latest - range, latest,
                               ImPlotCond_Always);
     }
   } else {
@@ -176,6 +183,7 @@ void drawScope(ScopeSettings &settings, Scope &scope) {
     })();
 
     const auto range = settings.limits.X.Max - settings.limits.X.Min;
+    std::cout << range << std::endl;
     auto times = sv::iota(0) | sv::take(PLOT_SAMPLES) |
                  sv::transform([range, &settings](auto i) {
                    return i / 1000. * range + settings.limits.X.Min;
@@ -193,7 +201,6 @@ void drawScope(ScopeSettings &settings, Scope &scope) {
                   double val = data[i] * to_scale(settings.voltageRange);
                   return std::pair{t, val};
                 });
-
     auto xs = vals |
               sv::transform([](const auto &pair) { return pair.first; }) |
               ranges::to_vector;
@@ -202,6 +209,71 @@ void drawScope(ScopeSettings &settings, Scope &scope) {
               ranges::to_vector;
 
     ImPlot::PlotLine(name.c_str(), xs.data(), ys.data(), xs.size());
-    ImPlot::EndPlot();
   }
+  ImPlot::EndPlot();
+}
+
+void drawScopeControls(ScopeSettings &settings, Scope &scope) {
+  ImGui::BeginDisabled(settings.disableControls);
+
+  ImGui::Checkbox("Run", &settings.run);
+  if (settings.run && !scope.isStreaming()) {
+    std::cout << "start" << std::endl;
+    auto temp = scope.startStream();
+    settings.recv = scope.startStream();
+  }
+  if (!settings.run && scope.isStreaming()) {
+    std::cout << "stop" << std::endl;
+    scope.stopStream();
+    settings.recv = std::nullopt;
+  }
+
+  if (scope.isStreaming()) {
+    settings.run = true;
+  } else {
+    settings.run = false;
+  }
+
+  ImGui::SameLine();
+  ImGui::Checkbox("Follow", &settings.follow);
+
+  if (ImGui::BeginCombo("Voltage Range",
+                        to_string(DEFAULT_VOLTAGE_RANGE).c_str())) {
+    static size_t selected_idx = 2;
+    sr::for_each(rv::enumerate(SUPPORTED_RANGES),
+                 [&settings, &scope](auto pair) {
+                   auto [i, v] = pair;
+                   const bool selected = i == selected_idx;
+                   if (ImGui::Selectable(to_string(v).c_str(), selected)) {
+                     selected_idx = i;
+                     settings.voltageRange = SUPPORTED_RANGES[i];
+                     scope.setVoltageRange(SUPPORTED_RANGES[i]);
+                     auto new_limits = to_limits(SUPPORTED_RANGES[i]);
+                     ImPlot::SetNextAxisLimits(ImAxis_Y1, new_limits.x, new_limits.y, ImGuiCond_Always); 
+                   }
+                   if (selected) {
+                     ImGui::SetItemDefaultFocus();
+                   }
+                 });
+    ImGui::EndCombo();
+  }
+
+  ImGui::SameLine();
+
+  if (ImGui::BeginCombo("Time Base", to_string(DEFAULT_TIMEBASE).c_str())) {
+    static size_t selected_idx = 0;
+    sr::for_each(rv::enumerate(SUPPORTED_TIMEBASES), [&settings](auto pair) {
+      auto [i, v] = pair;
+      const bool selected = i == selected_idx;
+      if (ImGui::Selectable(to_string(v).c_str(), selected)) {
+        selected_idx = i;
+        settings.timebase = SUPPORTED_TIMEBASES[i];
+      }
+      if (selected) {
+        ImGui::SetItemDefaultFocus();
+      }
+    });
+    ImGui::EndCombo();
+  }
+  ImGui::EndDisabled();
 }
