@@ -28,7 +28,6 @@ public:
 
     std::weak_ptr<Data<T>> data;
 
-    Send() = delete;
     Send(const std::shared_ptr<Data<T>> &data) : data(data) {}
 
   public:
