@@ -24,6 +24,8 @@ struct ScopeSettings {
   std::optional<mpsc::Recv<StreamResult>> recv;
   std::vector<double> dataA;
   std::vector<double> dataB;
+
+  void clearData();
 };
 
 void drawScope(ScopeSettings &settings, Scope &scope);
