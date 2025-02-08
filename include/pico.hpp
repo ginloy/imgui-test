@@ -40,7 +40,7 @@ inline constexpr size_t PHASE_ACC_SIZE = 1UL << 32;
 inline constexpr size_t AWG_BUF_SIZE = 4096;
 inline constexpr size_t DDS_FREQ = 48e6;
 inline constexpr double DDS_PERIOD = 1. / DDS_FREQ;
-inline constexpr uint32_t DELTA_PHASE = SAMPLE_RATE / DDS_FREQ * PHASE_ACC_SIZE;
+inline constexpr uint32_t DELTA_PHASE = 1 * ((double)PHASE_ACC_SIZE / (double)DDS_FREQ);
 std::array<uint8_t, AWG_BUF_SIZE> getNoiseWaveform();
 inline const std::array<uint8_t, AWG_BUF_SIZE> NOISE_WAVEFORM =
     getNoiseWaveform();
