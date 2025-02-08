@@ -12,7 +12,7 @@
 #include "libps2000/ps2000.h"
 #include "pico.hpp"
 #include "processing.hpp"
-#include "range/v3/view/all.hpp"
+#include "ui.hpp"
 
 #include <chrono>
 #include <cmath>
@@ -216,37 +216,37 @@ void ShowControls(OscilloscopeSettings &settings) {
 
 int main(int, char **) {
 
-  Scope scope;
+  Scope &scope = Scope::getInstance();
   scope.openScope();
 
-  if (scope.isOpen()) {
+  // if (scope.isOpen()) {
 
-    scope.setStreamingMode(true);
-    scope.setVoltageRange(PS2000_5V);
+  //   scope.setStreamingMode(true);
+  //   scope.setVoltageRange(PS2000_5V);
 
-    auto recv = scope.startStream().value();
-    auto start = std::chrono::high_resolution_clock::now();
-    scope.startFreqSweep(1, 20, 2, 0, 10, PS2000_UP);
-    // scope.startNoise(2.0);
+  //   auto recv = scope.startStream().value();
+  //   auto start = std::chrono::high_resolution_clock::now();
+  //   scope.startFreqSweep(1, 20, 2, 0, 10, PS2000_UP);
+  //   // scope.startNoise(2.0);
 
-    size_t samples = 0;
-    while (std::chrono::high_resolution_clock::now() - start <
-           std::chrono::seconds(10)) {
-      auto res = recv.flush();
-      for (const auto &e : res) {
-        samples += e.dataA.size();
-        for (auto p : e.dataA) {
-          printf("%.3f\n", p);
-        }
-      }
-    }
-    scope.stopStream();
-    scope.stopSigGen();
+  //   size_t samples = 0;
+  //   while (std::chrono::high_resolution_clock::now() - start <
+  //          std::chrono::seconds(10)) {
+  //     auto res = recv.flush();
+  //     for (const auto &e : res) {
+  //       samples += e.dataA.size();
+  //       for (auto p : e.dataA) {
+  //         printf("%.3f\n", p);
+  //       }
+  //     }
+  //   }
+  //   scope.stopStream();
+  //   scope.stopSigGen();
 
-    auto timeTaken = std::chrono::high_resolution_clock::now() - start;
-    printf("%zu samples in %lld seconds\n", samples,
-           std::chrono::duration_cast<std::chrono::seconds>(timeTaken).count());
-  }
+  //   auto timeTaken = std::chrono::high_resolution_clock::now() - start;
+  //   printf("%zu samples in %lld seconds\n", samples,
+  //          std::chrono::duration_cast<std::chrono::seconds>(timeTaken).count());
+  // }
 
   // Setup window
   glfwSetErrorCallback(glfw_error_callback);
@@ -414,10 +414,13 @@ int main(int, char **) {
 
     if (ImGui::BeginTabBar("MainTabs")) {
       if (ImGui::BeginTabItem("Scope", NULL)) {
-        DrawOscilloscope(settings,
-                         ImVec2(ImGui::GetContentRegionAvail().x,
-                                ImGui::GetContentRegionAvail().y * 0.6));
-        ShowControls(settings);
+        // DrawOscilloscope(settings,
+        //                  ImVec2(ImGui::GetContentRegionAvail().x,
+        //                         ImGui::GetContentRegionAvail().y * 0.6));
+        static ScopeSettings settings;
+        drawScope(settings, scope);
+        drawScopeControls(settings, scope);
+        // ShowControls(settings);
         ImGui::EndTabItem();
       }
 
