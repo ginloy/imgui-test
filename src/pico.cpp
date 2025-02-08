@@ -111,15 +111,15 @@ bool Scope::isOpen() {
 }
 
 bool Scope::isStreaming() {
-  if (streaming && !isOpen()) {
-    stopStream();
-  }
+  // if (streaming && !isOpen()) {
+  //   stopStream();
+  // }
   return streaming;
 }
 bool Scope::isGenerating() {
-  if (generating && !isOpen()) {
-    generating = false;
-  }
+  // if (generating && !isOpen()) {
+  //   generating = false;
+  // }
   return generating;
 }
 
