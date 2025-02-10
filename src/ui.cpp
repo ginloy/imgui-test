@@ -1,7 +1,11 @@
 #include "ui.hpp"
 #include "pico.hpp"
+#include "processing.hpp"
 
+#include <chrono>
 #include <cmath>
+#include <cstdlib>
+#include <future>
 #include <imgui.h>
 #include <implot.h>
 #include <iostream>
@@ -10,13 +14,14 @@
 #include <range/v3/all.hpp>
 #include <range/v3/range/conversion.hpp>
 #include <ranges>
+#include <thread>
 
 namespace sr = std::ranges;
 namespace sv = std::views;
 namespace rv = ranges::views;
 
 namespace {
-constexpr size_t PLOT_SAMPLES = 100000;
+constexpr size_t PLOT_SAMPLES = 10000;
 constexpr std::array SUPPORTED_RANGES = {
     PS2000_1V,   PS2000_2V,    PS2000_5V,    PS2000_10V,  PS2000_20V,
     PS2000_50MV, PS2000_100MV, PS2000_200MV, PS2000_500MV};
@@ -148,6 +153,7 @@ void drawScope(ScopeSettings &settings, Scope &scope) {
                             e.dataA.end());
       settings.dataB.insert(settings.dataB.end(), e.dataB.begin(),
                             e.dataB.end());
+      settings.updateSpectrum = true;
     });
   }
 
@@ -169,7 +175,12 @@ void drawScope(ScopeSettings &settings, Scope &scope) {
                               ImPlotCond_Always);
     }
   } else {
-    settings.limits = ImPlot::GetPlotLimits();
+    auto temp = ImPlot::GetPlotLimits();
+    if (abs(temp.X.Min - settings.limits.X.Min) > 1e-6 ||
+        abs(temp.X.Max - settings.limits.X.Max) > 1e-6) {
+      settings.updateSpectrum = true;
+    }
+    settings.limits = temp;
   }
 
   for (int i = 0; i < 2; ++i) {
@@ -217,7 +228,8 @@ void drawScope(ScopeSettings &settings, Scope &scope) {
 void drawScopeControls(ScopeSettings &settings, Scope &scope) {
   ImGui::BeginDisabled(settings.disableControls);
 
-  ImGui::Checkbox("Run", &settings.run);
+  if (ImGui::Checkbox("Run", &settings.run)) {
+  }
   if (settings.run && !scope.isStreaming()) {
     std::cout << "start" << std::endl;
     auto temp = scope.startStream();
@@ -249,6 +261,13 @@ void drawScopeControls(ScopeSettings &settings, Scope &scope) {
     scope.stopSigGen();
   }
 
+  ImGui::SameLine();
+  if (ImGui::Checkbox("Spectrum", &settings.showSpectrum)) {
+    std::cout << "test" << std::endl;
+    settings.resetScopeWindow = true;
+  }
+
+  ImGui::PushItemWidth(ImGui::CalcTextSize("2000 mV").x);
   if (ImGui::BeginCombo("Voltage Range",
                         to_string(settings.voltageRange).c_str())) {
     static size_t selected_idx =
@@ -296,6 +315,8 @@ void drawScopeControls(ScopeSettings &settings, Scope &scope) {
     ImGui::EndCombo();
   }
 
+  ImGui::PopItemWidth();
+
   if (ImGui::Button("Clear")) {
     settings.clearData();
     auto range = settings.limits.X.Max - settings.limits.X.Min;
@@ -307,4 +328,158 @@ void drawScopeControls(ScopeSettings &settings, Scope &scope) {
 void ScopeSettings::clearData() {
   dataA.clear();
   dataB.clear();
+}
+
+void drawSpectrum(ScopeSettings &settings) {
+  using namespace std::chrono_literals;
+  static bool first = true;
+  static auto [sendResult, recvResult] = mpsc::make<std::vector<double>>();
+  static auto [sendData, recvData] =
+      mpsc::make<std::pair<std::vector<double>, std::vector<double>>>();
+  static std::vector<double> ys;
+  static std::thread thread{[recv = std::move(recvData),
+                             send = std::move(sendResult)]() mutable {
+    while (true) {
+      auto data = recv.flush();
+      if (data.empty()) {
+        std::this_thread::sleep_for(100ms);
+        continue;
+      }
+
+      auto &&[dataA, dataB] = std::move(data.back());
+      auto spectrumA = fft(std::move(dataA));
+      auto spectrumB = fft(std::move(dataB));
+
+      send.send(rv::zip(spectrumA, spectrumB) | rv::transform([](auto pair) {
+                  auto &&[a, b] = pair;
+                  auto temp = a / b;
+                  auto res = 20 * log10(abs(temp));
+                  return res;
+                }) |
+                ranges::to_vector);
+    }
+  }};
+  if (first) {
+    thread.detach();
+    first = false;
+  }
+
+  if (settings.updateSpectrum) {
+    std::cout << "new limits" << std::endl;
+    auto limits = settings.limits.X;
+    auto scale = to_scale(settings.timebase);
+    ImPlotRange range{limits.Min / scale, limits.Max / scale};
+
+    int left = std::round(range.Min / DELTA_TIME);
+    int right = std::round(range.Max / DELTA_TIME);
+
+    if (left < 0) {
+      left = 0;
+    }
+    if (left >= settings.dataA.size()) {
+      left = settings.dataA.size() - 1;
+    }
+
+    if (right < 0) {
+      right = 0;
+    }
+    if (right >= settings.dataA.size()) {
+      right = settings.dataA.size() - 1;
+    }
+
+    auto dataA = settings.dataA | rv::slice(left, right) | ranges::to_vector;
+    auto dataB = settings.dataB | rv::slice(left, right) | ranges::to_vector;
+    sendData.send(std::pair{std::move(dataA), std::move(dataB)});
+
+    settings.updateSpectrum = false;
+  }
+
+  auto result = recvResult.flush();
+  if (!result.empty()) {
+    ys = std::move(result.back());
+  }
+
+  double bin_size = SAMPLE_RATE / 2 / ys.size();
+  auto temp = rv::iota(0) | rv::take(ys.size()) |
+              rv::transform([bin_size](auto i) { return i * bin_size; }) |
+              rv::drop_while([&settings](auto i) {
+                return i < settings.spectrumLimits.X.Min;
+              }) |
+              rv::take_while([&settings](auto &&i) {
+                return i <= settings.spectrumLimits.X.Max;
+              });
+
+  std::cout << std::format("Distance: {}", sr::distance(temp));
+  auto stride = std::max<size_t>(1, sr::distance(temp) / PLOT_SAMPLES);
+  std::cout << std::format("Stride: {}", stride) << std::endl;
+  auto xs = temp | rv::stride(stride) | ranges::to_vector;
+  auto strided_ys = ys | rv::stride(stride) | ranges::to_vector;
+  if (ImPlot::BeginPlot("Spectrum", ImGui::GetContentRegionAvail(), 0)) {
+    ImPlot::SetupAxes("Frequency", "Db", 0, 0);
+    ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, 0, 20000);
+    ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, -100, 100);
+    ImPlot::SetupAxesLimits(0., 20e3, -100., 100., ImPlotCond_Once);
+
+    ImPlot::PlotLine("SpectrumPlot", xs.data(), strided_ys.data(), xs.size());
+
+    settings.spectrumLimits = ImPlot::GetPlotLimits();
+    ImPlot::EndPlot();
+  }
+}
+
+void drawScopeTab(ScopeSettings &settings, Scope &scope) {
+  auto size = ImGui::GetContentRegionAvail();
+  if (ImGui::BeginChild("Scope", {size.x, size.y * 0.75f},
+                        ImGuiChildFlags_ResizeY | ImGuiChildFlags_Borders)) {
+    auto available = ImGui::GetContentRegionAvail();
+    auto flags = ImGuiChildFlags_None;
+    if (settings.showSpectrum) {
+      flags = ImGuiChildFlags_ResizeX;
+      ImGui::SetNextWindowSizeConstraints({available.x * 0.2f, available.y},
+                                          {available.x * 0.8f, available.y});
+      available.x /= 2;
+    }
+    if (settings.resetScopeWindow) {
+      flags = ImGuiChildFlags_None;
+      settings.resetScopeWindow = false;
+    }
+    if (ImGui::BeginChild("ScopeHalf", available, flags)) {
+      drawScope(settings, scope);
+      ImGui::EndChild();
+    }
+    if (settings.showSpectrum) {
+      ImGui::SameLine();
+      if (ImGui::BeginChild("SpectrumHalf", ImGui::GetContentRegionAvail(),
+                            0)) {
+        drawSpectrum(settings);
+        ImGui::EndChild();
+      }
+    }
+    ImGui::EndChild();
+  }
+  if (ImGui::BeginChild("Controls", ImGui::GetContentRegionAvail(), 0)) {
+    drawScopeControls(settings, scope);
+    ImGui::EndChild();
+  }
+}
+
+void ScopeSettings::fillRandomData(size_t samples) {
+  auto iota = sv::iota(0) |
+              sv::transform([](auto e) { return (double)e * DELTA_TIME; });
+  auto dataA = iota | sv::transform(
+                          [](auto e) { return 2. * sin(2 * M_PI * 1000 * e); });
+  auto dataB =
+      iota | sv::transform([](auto e) { return sin(2 * M_PI * 500 * e); });
+
+  auto randomData =
+      iota | sv::transform([](auto e) { return (double)rand() / RAND_MAX; });
+
+  auto a = randomData | sv::take(samples) | ranges::to_vector;
+  auto b =
+      randomData | sv::drop(samples) | sv::take(samples) | ranges::to_vector;
+
+  this->dataA.insert(this->dataA.end(), a.begin(), a.end());
+  this->dataB.insert(this->dataB.end(), b.begin(), b.end());
+
+  updateSpectrum = true;
 }
