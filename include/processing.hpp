@@ -9,8 +9,8 @@
 
 template <typename T>
 concept DoubleRange = requires(T a) {
-  std::convertible_to<std::ranges::range_value_t<T>, double>;
-  std::ranges::range<T>;
+  requires std::convertible_to<std::ranges::range_value_t<T>, double>;
+  requires std::ranges::range<T>;
 };
 
 std::vector<std::complex<double>> fft(DoubleRange auto &&input) {

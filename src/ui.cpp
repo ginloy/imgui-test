@@ -174,8 +174,8 @@ void drawScope(ScopeSettings &settings, Scope &scope) {
     }
   } else {
     auto temp = ImPlot::GetPlotLimits();
-    if (abs(temp.X.Min - settings.limits.X.Min) > 1e-6 ||
-        abs(temp.X.Max - settings.limits.X.Max) > 1e-6) {
+    if (std::abs(temp.X.Min - settings.limits.X.Min) > 1e-6 ||
+        std::abs(temp.X.Max - settings.limits.X.Max) > 1e-6) {
       settings.updateSpectrum = true;
     }
     settings.limits = temp;
@@ -193,7 +193,6 @@ void drawScope(ScopeSettings &settings, Scope &scope) {
       }
     })();
 
-    const auto range = settings.limits.X.Max - settings.limits.X.Min;
     auto scale = to_scale(settings.timebase);
     auto left = settings.limits.X.Min / scale / DELTA_TIME;
     auto right = settings.limits.X.Max / scale / DELTA_TIME;
