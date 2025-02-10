@@ -320,6 +320,8 @@ void drawScopeControls(ScopeSettings &settings, Scope &scope) {
 void ScopeSettings::clearData() {
   dataA.clear();
   dataB.clear();
+
+  updateSpectrum = true;
 }
 
 void drawSpectrum(ScopeSettings &settings) {
