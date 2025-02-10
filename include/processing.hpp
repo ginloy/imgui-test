@@ -26,10 +26,6 @@ std::vector<std::complex<double>> fft(DoubleRange auto &&input) {
 
   std::ranges::copy(input, in);
 
-  // for (size_t i = 0; i < N; ++i) {
-  //   in[i] = input[i];
-  // }
-
   fftw_execute(p);
 
   auto outComplex = std::ranges::subrange(out, out + N_out) |
