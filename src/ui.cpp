@@ -194,28 +194,22 @@ void drawScope(ScopeSettings &settings, Scope &scope) {
     })();
 
     const auto range = settings.limits.X.Max - settings.limits.X.Min;
-    auto times = sv::iota(0) | sv::take(PLOT_SAMPLES) |
-                 sv::transform([range, &settings](auto i) {
-                   return i / 1000. * range + settings.limits.X.Min;
-                 });
-    auto vals = times | sv::transform([&settings](auto t) {
-                  int64_t idx =
-                      std::round(t / to_scale(settings.timebase) / DELTA_TIME);
-                  return std::pair{t, idx};
-                }) |
-                sv::filter([&data](auto pair) {
-                  return pair.second >= 0 && pair.second < data.size();
-                }) |
-                sv::transform([&data, &settings](auto pair) {
-                  auto &&[t, i] = pair;
-                  double val = data[i] * to_scale(settings.voltageRange);
-                  return std::pair{t, val};
-                });
-    auto xs = vals |
-              sv::transform([](const auto &pair) { return pair.first; }) |
-              ranges::to_vector;
-    auto ys = vals |
-              sv::transform([](const auto &pair) { return pair.second; }) |
+    auto scale = to_scale(settings.timebase);
+    auto left = settings.limits.X.Min / scale / DELTA_TIME;
+    auto right = settings.limits.X.Max / scale / DELTA_TIME;
+    left = left < 0 ? 0. : left;
+    left = left >= data.size() ? data.size() : left;
+    right = right < 0 ? 0. : right;
+    right = right >= data.size() ? data.size() : right;
+    size_t size = right - left;
+    auto stride = std::max(1UL, size / PLOT_SAMPLES);
+    auto idxs =
+        rv::iota((size_t)round(left)) | rv::take(size) | rv::stride(stride);
+    auto xs =
+        idxs |
+        rv::transform([scale](auto e) { return e * DELTA_TIME * scale; }) |
+        ranges::to_vector;
+    auto ys = idxs | rv::transform([&data](auto e) { return data[e]; }) |
               ranges::to_vector;
 
     ImPlot::PlotLine(name.c_str(), xs.data(), ys.data(), xs.size());
