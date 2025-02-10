@@ -344,7 +344,7 @@ void drawSpectrum(ScopeSettings &settings) {
       auto spectrumA = fft(std::move(dataA));
       auto spectrumB = fft(std::move(dataB));
 
-      send.send(rv::zip(spectrumA, spectrumB) | rv::transform([](auto pair) {
+      send.send(rv::zip(spectrumA, spectrumB) | rv::transform([](auto &&pair) {
                   auto &&[a, b] = pair;
                   auto temp = a / b;
                   auto res = 20 * log10(abs(temp));
@@ -371,14 +371,14 @@ void drawSpectrum(ScopeSettings &settings) {
       left = 0;
     }
     if (left >= settings.dataA.size()) {
-      left = settings.dataA.size() - 1;
+      left = settings.dataA.size();
     }
 
     if (right < 0) {
       right = 0;
     }
     if (right >= settings.dataA.size()) {
-      right = settings.dataA.size() - 1;
+      right = settings.dataA.size();
     }
 
     auto dataA = settings.dataA | rv::slice(left, right) | ranges::to_vector;
@@ -395,20 +395,24 @@ void drawSpectrum(ScopeSettings &settings) {
 
   double bin_size = SAMPLE_RATE / 2 / ys.size();
   auto temp = rv::iota(0) | rv::take(ys.size()) |
-              rv::transform([bin_size](auto i) { return i * bin_size; }) |
+              rv::transform([bin_size](auto i) {
+                return std::pair{i, i * bin_size};
+              }) |
               rv::drop_while([&settings](auto i) {
-                return i < settings.spectrumLimits.X.Min;
+                return i.second < settings.spectrumLimits.X.Min;
               }) |
               rv::take_while([&settings](auto &&i) {
-                return i <= settings.spectrumLimits.X.Max;
+                return i.second <= settings.spectrumLimits.X.Max;
               });
 
-  std::cout << std::format("Distance: {}", sr::distance(temp));
   auto stride = std::max<size_t>(1, sr::distance(temp) / PLOT_SAMPLES);
-  std::cout << std::format("Stride: {}", stride) << std::endl;
-  auto xs = temp | rv::stride(stride) | ranges::to_vector;
-  auto strided_ys = ys | rv::stride(stride) | ranges::to_vector;
-  if (ImPlot::BeginPlot("Spectrum", ImGui::GetContentRegionAvail(), 0)) {
+  auto xs = temp | rv::stride(stride) |
+            rv::transform([](auto p) { return p.second; }) | ranges::to_vector;
+  auto strided_ys = temp | rv::stride(stride) |
+                    rv::transform([](auto p) { return ys[p.first]; }) |
+                    ranges::to_vector;
+  if (ImPlot::BeginPlot("Spectrum", ImGui::GetContentRegionAvail(),
+                        ImPlotFlags_NoLegend)) {
     ImPlot::SetupAxes("Frequency", "Db", 0, 0);
     ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, 0, 20000);
     ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, -100, 100);
@@ -468,9 +472,8 @@ void ScopeSettings::fillRandomData(size_t samples) {
   auto randomData =
       iota | sv::transform([](auto e) { return (double)rand() / RAND_MAX; });
 
-  auto a = randomData | sv::take(samples) | ranges::to_vector;
-  auto b =
-      randomData | sv::drop(samples) | sv::take(samples) | ranges::to_vector;
+  auto a = dataA | sv::take(samples) | ranges::to_vector;
+  auto b = dataB | sv::take(samples) | ranges::to_vector;
 
   this->dataA.insert(this->dataA.end(), a.begin(), a.end());
   this->dataB.insert(this->dataB.end(), b.begin(), b.end());
