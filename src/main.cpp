@@ -329,11 +329,13 @@ int main(int, char **) {
   bool show_another_window = false;
   ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-  OscilloscopeSettings settings;
-  settings.channels[0].color = ImVec4(1, 0.5f, 0, 1);
-  settings.channels[1].color = ImVec4(0, 1, 0.5f, 1);
+  // OscilloscopeSettings settings;
+  // settings.channels[0].color = ImVec4(1, 0.5f, 0, 1);
+  // settings.channels[1].color = ImVec4(0, 1, 0.5f, 1);
 
   TestData testData;
+  ScopeSettings settings;
+  settings.fillRandomData(SAMPLE_RATE * 10);
 
   // Main loop
   while (!glfwWindowShouldClose(window)) {
@@ -417,9 +419,10 @@ int main(int, char **) {
         // DrawOscilloscope(settings,
         //                  ImVec2(ImGui::GetContentRegionAvail().x,
         //                         ImGui::GetContentRegionAvail().y * 0.6));
-        static ScopeSettings settings;
-        drawScope(settings, scope);
-        drawScopeControls(settings, scope);
+        // static ScopeSettings settings;
+        // drawScope(settings, scope);
+        // drawScopeControls(settings, scope);
+        drawScopeTab(settings, scope);
         // ShowControls(settings);
         ImGui::EndTabItem();
       }
