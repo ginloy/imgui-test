@@ -2,10 +2,8 @@
 #include "pico.hpp"
 #include "processing.hpp"
 
-#include <chrono>
 #include <cmath>
 #include <cstdlib>
-#include <future>
 #include <imgui.h>
 #include <implot.h>
 #include <iostream>
