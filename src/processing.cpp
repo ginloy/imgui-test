@@ -1,34 +1,8 @@
 #include "processing.hpp"
-#include "fftw3.h"
 
-#include <ranges>
-#include<range/v3/all.hpp>
+#include <cmath>
+#include <range/v3/all.hpp>
 
-std::vector<std::complex<double>> fft(const std::vector<double> &input) {
-
-  const size_t N = input.size();
-  const size_t N_out = N / 2 + 1;
-  double *in = fftw_alloc_real(N);
-  fftw_complex *out = fftw_alloc_complex(N_out);
-
-  fftw_plan p = fftw_plan_dft_r2c_1d(N, in, out, FFTW_ESTIMATE);
-
-  for (size_t i = 0; i < N; ++i) {
-    in[i] = input[i];
-  }
-
-  fftw_execute(p);
-
-  auto outComplex = std::ranges::subrange(out, out + N_out) |
-               std::views::transform([N](const auto &e) {
-                 return std::complex<double>{e[0] / N, e[1] / N};
-               });
-  auto normalized = outComplex | std::views::drop(1) | std::views::transform([](const auto &e) {return 2. * e;});
-  std::vector<std::complex<double>> result = ranges::views::concat(outComplex | ranges::views::take(1), normalized) | ranges::to_vector;
-
-  fftw_destroy_plan(p);
-  fftw_free(in);
-  fftw_free(out);
-
-  return result;
+double hann(size_t n, size_t N) {
+  return 0.5 * (1 - std::cos(2 * M_PI * n / (N - 1)));
 }
