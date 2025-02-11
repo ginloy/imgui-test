@@ -167,7 +167,7 @@ void drawScope(ScopeSettings &settings, Scope &scope) {
     double latest = DELTA_TIME *
                     std::max(settings.dataA.size(), settings.dataB.size()) *
                     to_scale(settings.timebase);
-    if (latest > settings.limits.X.Max | latest < settings.limits.X.Min) {
+    if (latest > settings.limits.X.Max || latest < settings.limits.X.Min) {
       auto range = settings.limits.X.Max - settings.limits.X.Min;
       ImPlot::SetupAxisLimits(ImAxis_X1, latest - range, latest,
                               ImPlotCond_Always);
@@ -245,8 +245,8 @@ void drawScopeControls(ScopeSettings &settings, Scope &scope) {
   static bool gen = false;
   ImGui::Checkbox("Noise", &gen);
   if (gen && !scope.isGenerating()) {
-    scope.startNoise(2.0);
-    // scope.startFreqSweep(1, 20, 2.0, 0, 30, PS2000_UPDOWN);
+    // scope.startNoise(2.0);
+    scope.startFreqSweep(1, 1000, 2.0, 0, 5, PS2000_UPDOWN);
   }
   if (!gen && scope.isGenerating()) {
     scope.stopSigGen();
@@ -330,28 +330,23 @@ void drawSpectrum(ScopeSettings &settings) {
   static auto [sendData, recvData] =
       mpsc::make<std::pair<std::vector<double>, std::vector<double>>>();
   static std::vector<double> ys;
-  static std::thread thread{[recv = std::move(recvData),
-                             send = std::move(sendResult)]() mutable {
-    while (true) {
-      auto data = recv.flush();
-      if (data.empty()) {
-        std::this_thread::sleep_for(100ms);
-        continue;
-      }
+  static std::thread thread{
+      [recv = std::move(recvData), send = std::move(sendResult)]() mutable {
+        while (true) {
+          auto data = recv.flush();
+          if (data.empty()) {
+            std::this_thread::sleep_for(100ms);
+            continue;
+          }
 
-      auto &&[dataA, dataB] = std::move(data.back());
-      auto spectrumA = fft(std::move(dataA));
-      auto spectrumB = fft(std::move(dataB));
+          auto &&[dataA, dataB] = std::move(data.back());
+          auto &&res = welch(std::move(dataA), std::move(dataB), 1 << 16);
+          // auto spectrumA = fft(std::move(dataA));
+          // auto spectrumB = fft(std::move(dataB));
 
-      send.send(rv::zip(spectrumA, spectrumB) | rv::transform([](auto &&pair) {
-                  auto &&[a, b] = pair;
-                  auto temp = a / b;
-                  auto res = 20 * log10(abs(temp));
-                  return res;
-                }) |
-                ranges::to_vector);
-    }
-  }};
+          send.send(std::move(res));
+        }
+      }};
   if (first) {
     thread.detach();
     first = false;
@@ -393,16 +388,15 @@ void drawSpectrum(ScopeSettings &settings) {
   }
 
   double bin_size = SAMPLE_RATE / 2 / ys.size();
-  auto temp = rv::iota(0) | rv::take(ys.size()) |
-              rv::transform([bin_size](auto i) {
-                return std::pair{i, i * bin_size};
-              }) |
-              rv::drop_while([&settings](auto i) {
-                return i.second < settings.spectrumLimits.X.Min;
-              }) |
-              rv::take_while([&settings](auto &&i) {
-                return i.second <= settings.spectrumLimits.X.Max;
-              });
+  auto temp =
+      rv::iota(0) | rv::take(ys.size()) |
+      rv::transform([bin_size](auto i) { return std::pair{i, i * bin_size}; }) |
+      rv::drop_while([&settings](auto i) {
+        return i.second < settings.spectrumLimits.X.Min;
+      }) |
+      rv::take_while([&settings](auto &&i) {
+        return i.second <= settings.spectrumLimits.X.Max;
+      });
 
   auto stride = std::max<size_t>(1, sr::distance(temp) / PLOT_SAMPLES);
   auto xs = temp | rv::stride(stride) |
