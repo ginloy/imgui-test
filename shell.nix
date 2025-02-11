@@ -11,6 +11,7 @@ in
       cmake
       pkg-config
       linuxPackages_latest.perf
+      clang-tools
     ];
 
     buildInputs = with pkgs; [
@@ -20,5 +21,6 @@ in
       libps2000
       gtest
       range-v3
+      llvmPackages.openmp
     ];
   }

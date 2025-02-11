@@ -3,6 +3,9 @@
 
 #include <complex>
 #include <fftw3.h>
+#include <iostream>
+#include <mutex>
+#include <omp.h>
 #include <range/v3/all.hpp>
 #include <ranges>
 #include <vector>
@@ -16,7 +19,17 @@ concept DoubleRange = requires(T a) {
   requires std::ranges::range<T>;
 };
 
-std::vector<std::complex<double>> fft(DoubleRange auto &&input) {
+auto hann(DoubleRange auto &&in) {
+  size_t N = ranges::distance(in);
+  return ranges::views::enumerate(in) | ranges::views::transform([N](auto &&p) {
+           auto &&[i, e] = std::forward<decltype(p)>(p);
+           return hann(i, N) * e;
+         });
+}
+
+std::vector<std::complex<double>> fft(DoubleRange auto &&input,
+                                      std::mutex *lock = nullptr) {
+
   const size_t N = std::ranges::distance(input);
   if (N < 10) {
     return {};
@@ -24,8 +37,14 @@ std::vector<std::complex<double>> fft(DoubleRange auto &&input) {
   const size_t N_out = N / 2 + 1;
   double *in = fftw_alloc_real(N);
   fftw_complex *out = fftw_alloc_complex(N_out);
+  fftw_plan p;
 
-  fftw_plan p = fftw_plan_dft_r2c_1d(N, in, out, FFTW_ESTIMATE);
+  if (lock) {
+    std::unique_lock temp{*lock};
+    p = fftw_plan_dft_r2c_1d(N, in, out, FFTW_ESTIMATE);
+  } else {
+    p = fftw_plan_dft_r2c_1d(N, in, out, FFTW_ESTIMATE);
+  }
 
   std::ranges::copy(input, in);
 
@@ -41,7 +60,12 @@ std::vector<std::complex<double>> fft(DoubleRange auto &&input) {
     outComplex[N / 2] /= 2;
   }
 
-  fftw_destroy_plan(p);
+  if (lock) {
+    std::unique_lock temp{*lock};
+    fftw_destroy_plan(p);
+  } else {
+    fftw_destroy_plan(p);
+  }
   fftw_free(in);
   fftw_free(out);
 
@@ -57,44 +81,55 @@ std::vector<double> welch(DoubleRange auto &&dataA, DoubleRange auto &&dataB,
   }
 
   size_t stride = windowSize * OVERLAP;
+  auto limit = N - windowSize + stride;
 
   size_t count = 0;
   std::vector<std::complex<double>> total(windowSize / 2 + 1, {0., 0.});
-  for (size_t left = 0; left + windowSize - stride < N; left += stride) {
-    size_t right = left + windowSize;
-    auto a = dataA | rv::slice(left, right > N ? N : right);
-    auto b = dataB | rv::slice(left, right > N ? N : right);
 
-    size_t pad = right > N ? right - N : 0;
-    auto padrng = rv::repeat_n(0., pad);
-    auto aPadded = rv::concat(a, padrng);
-    auto bPadded = rv::concat(b, padrng);
-
-    auto aHanned =
-        rv::enumerate(aPadded) | rv::transform([windowSize](auto &&p) {
-          auto &&[i, e] = std::forward<decltype(p)>(p);
-          return e * hann(i, windowSize);
-        });
-    auto bHanned =
-        rv::enumerate(bPadded) | rv::transform([windowSize](auto &&p) {
-          auto &&[i, e] = std::forward<decltype(p)>(p);
-          return e * hann(i, windowSize);
-        });
-
-    auto aTrans = fft(aHanned);
-    auto bTrans = fft(bHanned);
-
-    auto tnsf = rv::zip(aTrans, bTrans) | rv::transform([](auto &&p) {
-                  auto &&[a, b] = std::forward<decltype(p)>(p);
-                  auto temp = a / b;
-                  return temp * temp;
+  if (N <= windowSize) {
+    auto a = fft(hann(dataA));
+    auto b = fft(hann(dataB));
+    auto tnsf = rv::zip(a, b) | rv::transform([](auto &&p) {
+                  return std::pow(p.first / p.second, 2);
                 });
+    total = tnsf | ranges::to_vector;
+    count = 1;
+  } else {
 
-    ranges::for_each(rv::enumerate(tnsf), [&total](auto &&p) {
-      auto &&[i, e] = std::forward<decltype(p)>(p);
-      total[i] += e;
-    });
-    ++count;
+    std::mutex lock;
+
+    #pragma omp parallel for
+    for (size_t left = 0; left < limit; left += stride) {
+      size_t right = left + windowSize;
+      auto a = dataA | rv::slice(left, right > N ? N : right);
+      auto b = dataB | rv::slice(left, right > N ? N : right);
+
+      size_t pad = right > N ? right - N : 0;
+      auto padrng = rv::repeat_n(0., pad);
+      auto aPadded = rv::concat(a, padrng);
+      auto bPadded = rv::concat(b, padrng);
+
+      auto aHanned = hann(aPadded);
+      auto bHanned = hann(bPadded);
+
+      auto aTrans = fft(aHanned, &lock);
+      auto bTrans = fft(bHanned, &lock);
+
+      auto tnsf = rv::zip(aTrans, bTrans) | rv::transform([](auto &&p) {
+                    auto &&[a, b] = std::forward<decltype(p)>(p);
+                    auto temp = a / b;
+                    return temp * temp;
+                  });
+
+      #pragma omp critical
+      {
+        ranges::for_each(rv::enumerate(tnsf), [&total](auto &&p) {
+          auto &&[i, e] = std::forward<decltype(p)>(p);
+          total[i] += e;
+        });
+        ++count;
+      }
+    }
   }
 
   auto ret =
