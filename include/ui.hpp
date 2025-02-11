@@ -18,6 +18,8 @@ struct ScopeSettings {
   TimeBase timebase = TimeBase::S;
   ImPlotRect limits = {0, 10, -10, 10};
   ImPlotRect spectrumLimits = {0, 20e3, -100, 100};
+  size_t windowSize = 1 << 16;
+    
   bool disableControls = false;
   bool run = false;
   bool follow = false;

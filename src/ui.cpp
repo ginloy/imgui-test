@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <cstdlib>
+#include <format>
 #include <imgui.h>
 #include <implot.h>
 #include <iostream>
@@ -252,12 +253,6 @@ void drawScopeControls(ScopeSettings &settings, Scope &scope) {
     scope.stopSigGen();
   }
 
-  ImGui::SameLine();
-  if (ImGui::Checkbox("Spectrum", &settings.showSpectrum)) {
-    std::cout << "test" << std::endl;
-    settings.resetScopeWindow = true;
-  }
-
   ImGui::PushItemWidth(ImGui::CalcTextSize("2000 mV").x);
   if (ImGui::BeginCombo("Voltage Range",
                         to_string(settings.voltageRange).c_str())) {
@@ -313,6 +308,45 @@ void drawScopeControls(ScopeSettings &settings, Scope &scope) {
     auto range = settings.limits.X.Max - settings.limits.X.Min;
     ImPlot::SetNextAxisLimits(ImAxis_X1, 0, 0 + range, ImGuiCond_Always);
   }
+
+  ImGui::SeparatorText("Spectrum Analysis");
+
+  ImGui::PushItemWidth(ImGui::CalcTextSize("100000").x);
+  if (ImGui::BeginCombo("Window Size",
+                        std::format("{}", settings.windowSize).c_str())) {
+    static const auto powers =
+        ranges::views::iota(5) | ranges::views::take(15) | ranges::to_vector;
+    static size_t selected_idx =
+        ranges::distance(powers | rv::take_while([&settings](auto &&e) {
+                           return std::pow(2, e) != settings.windowSize;
+                         }));
+
+    ranges::for_each(rv::enumerate(powers), [&settings](auto &&p) {
+      auto &&[i, power] = std::forward<decltype(p)>(p);
+      const bool selected = i == selected_idx;
+      const size_t windowSize = std::pow(2, power);
+      if (ImGui::Selectable(std::format("{}", windowSize).c_str(), selected)) {
+        std::cout << "Selected " << windowSize << std::endl;
+        selected_idx = i;
+        if (windowSize != settings.windowSize) {
+          settings.updateSpectrum = true;
+          settings.windowSize = windowSize;
+        }
+      }
+      if (selected) {
+        ImGui::SetItemDefaultFocus();
+      }
+    });
+    ImGui::EndCombo();
+  }
+  ImGui::PopItemWidth();
+
+  ImGui::SameLine();
+  if (ImGui::Checkbox("Spectrum", &settings.showSpectrum)) {
+    std::cout << "test" << std::endl;
+    settings.resetScopeWindow = true;
+  }
+
   ImGui::EndDisabled();
 }
 
@@ -327,8 +361,8 @@ void drawSpectrum(ScopeSettings &settings) {
   using namespace std::chrono_literals;
   static bool first = true;
   static auto [sendResult, recvResult] = mpsc::make<std::vector<double>>();
-  static auto [sendData, recvData] =
-      mpsc::make<std::pair<std::vector<double>, std::vector<double>>>();
+  static auto [sendData, recvData] = mpsc::make<
+      std::tuple<std::vector<double>, std::vector<double>, size_t>>();
   static std::vector<double> ys;
   static std::thread thread{
       [recv = std::move(recvData), send = std::move(sendResult)]() mutable {
@@ -339,10 +373,8 @@ void drawSpectrum(ScopeSettings &settings) {
             continue;
           }
 
-          auto &&[dataA, dataB] = std::move(data.back());
-          auto &&res = welch(std::move(dataA), std::move(dataB), 1 << 16);
-          // auto spectrumA = fft(std::move(dataA));
-          // auto spectrumB = fft(std::move(dataB));
+          auto &&[dataA, dataB, windowSize] = std::move(data.back());
+          auto &&res = welch(std::move(dataA), std::move(dataB), windowSize);
 
           send.send(std::move(res));
         }
@@ -353,7 +385,6 @@ void drawSpectrum(ScopeSettings &settings) {
   }
 
   if (settings.updateSpectrum) {
-    std::cout << "new limits" << std::endl;
     auto limits = settings.limits.X;
     auto scale = to_scale(settings.timebase);
     ImPlotRange range{limits.Min / scale, limits.Max / scale};
@@ -377,7 +408,8 @@ void drawSpectrum(ScopeSettings &settings) {
 
     auto dataA = settings.dataA | rv::slice(left, right) | ranges::to_vector;
     auto dataB = settings.dataB | rv::slice(left, right) | ranges::to_vector;
-    sendData.send(std::pair{std::move(dataA), std::move(dataB)});
+    sendData.send(
+        std::tuple{std::move(dataA), std::move(dataB), settings.windowSize});
 
     settings.updateSpectrum = false;
   }
