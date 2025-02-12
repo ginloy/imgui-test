@@ -2,7 +2,6 @@
 #define MPSC_HPP
 
 #include <concepts>
-#include <iostream>
 #include <memory>
 #include <mutex>
 #include <optional>
