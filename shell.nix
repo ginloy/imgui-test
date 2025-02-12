@@ -3,8 +3,10 @@
     url = "https://github.com/ginloy/libps2000";
   };
   libps2000 = stable.callPackage libps2000Repo {};
+  # stdenv = pkgs.llvmPackages.libcxxStdenv;
 in
-  pkgs.mkShell {
+  (pkgs.mkShell.override { stdenv = pkgs.clangStdenv; }) {
+  # pkgs.mkShell {
     nativeBuildInputs = with pkgs; [
       meson
       ninja
@@ -21,5 +23,6 @@ in
       libps2000
       gtest
       range-v3
+      llvmPackages.openmp
     ];
   }
