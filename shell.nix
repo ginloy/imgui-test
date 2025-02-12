@@ -21,6 +21,5 @@ in
       libps2000
       gtest
       range-v3
-      llvmPackages.openmp
     ];
   }

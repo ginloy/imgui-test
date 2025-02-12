@@ -5,7 +5,6 @@
 #include <fftw3.h>
 #include <iostream>
 #include <mutex>
-#include <omp.h>
 #include <range/v3/all.hpp>
 #include <ranges>
 #include <vector>
@@ -127,8 +126,9 @@ std::vector<double> welch(DoubleRange auto &&dataA, DoubleRange auto &&dataB,
           auto &&[i, e] = std::forward<decltype(p)>(p);
           total[i] += e;
         });
-        ++count;
       }
+      #pragma omp atomic update
+      ++count;
     }
   }
 
