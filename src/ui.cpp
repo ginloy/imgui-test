@@ -26,12 +26,19 @@ constexpr std::array SUPPORTED_RANGES = {
     PS2000_50MV, PS2000_100MV, PS2000_200MV, PS2000_500MV};
 constexpr std::array SUPPORTED_TIMEBASES = {TimeBase::S, TimeBase::MS,
                                             TimeBase::US};
+constexpr std::array SUPPORTED_SIGNALS = {SigGen::FreqSweep, SigGen::Noise};
 
 std::string to_string(TimeBase tb);
 std::string to_string(enPS2000Range range);
+std::string to_string(SigGen signal);
 double to_scale(TimeBase tb);
 double to_scale(enPS2000Range range);
 ImVec2 to_limits(enPS2000Range range);
+void drawSweepSettings(FreqSweepSettings &settings);
+void drawSigGenControls(ScopeSettings &settings, Scope &scope);
+void drawSpectrumControls(ScopeSettings &settings);
+void drawScopeControls(ScopeSettings &settings, Scope &scope);
+void drawControls(ScopeSettings &settings, Scope &scope);
 
 std::string to_string(TimeBase tb) {
   switch (tb) {
@@ -73,6 +80,15 @@ std::string to_string(enPS2000Range range) {
   case PS2000_MAX_RANGES:
     return "";
   }
+}
+
+std::string to_string(SigGen signal) {
+  switch (signal) {
+  case SigGen::Noise:
+    return "Noise";
+  case SigGen::FreqSweep:
+    return "Frequency Sweep";
+  };
 }
 
 double to_scale(TimeBase tb) {
@@ -136,99 +152,17 @@ ImVec2 to_limits(enPS2000Range range) {
   }
 }
 
-} // namespace
-
-void drawScope(ScopeSettings &settings, Scope &scope) {
-  static uint32_t frame = 0;
-  ++frame;
-
-  if (!ImPlot::BeginPlot("##Oscilloscope", ImGui::GetContentRegionAvail())) {
-    return;
-  }
-
-  if (settings.recv.has_value()) {
-    sr::for_each(settings.recv->flush(), [&settings](const auto &e) {
-      settings.dataA.insert(settings.dataA.end(), e.dataA.begin(),
-                            e.dataA.end());
-      settings.dataB.insert(settings.dataB.end(), e.dataB.begin(),
-                            e.dataB.end());
-      settings.updateSpectrum = true;
-    });
-  }
-
-  ImPlot::SetupAxes(to_string(settings.timebase).c_str(),
-                    to_string(settings.voltageRange).c_str());
-  auto vLimits = to_limits(settings.voltageRange);
-  ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, vLimits.x, vLimits.y);
-  ImPlot::SetupAxisLimits(ImAxis_Y1, vLimits.x, vLimits.y);
-  ImPlot::SetupAxisLimits(ImAxis_X1, settings.limits.X.Min,
-                          settings.limits.X.Max);
-
-  if (settings.follow && scope.isStreaming() && frame % 3 == 0) {
-    double latest = DELTA_TIME *
-                    std::max(settings.dataA.size(), settings.dataB.size()) *
-                    to_scale(settings.timebase);
-    if (latest > settings.limits.X.Max || latest < settings.limits.X.Min) {
-      auto range = settings.limits.X.Max - settings.limits.X.Min;
-      ImPlot::SetupAxisLimits(ImAxis_X1, latest - range, latest,
-                              ImPlotCond_Always);
-    }
-  } else {
-    auto temp = ImPlot::GetPlotLimits();
-    if (std::abs(temp.X.Min - settings.limits.X.Min) > 1e-6 ||
-        std::abs(temp.X.Max - settings.limits.X.Max) > 1e-6) {
-      settings.updateSpectrum = true;
-    }
-    settings.limits = temp;
-  }
-
-  for (int i = 0; i < 2; ++i) {
-    std::string name;
-    const std::vector<double> &data = ([i, &settings, &name]() {
-      if (i == 0) {
-        name = "Channel A";
-        return settings.dataA;
-      } else {
-        name = "Channel B";
-        return settings.dataB;
-      }
-    })();
-
-    auto scale = to_scale(settings.timebase);
-    auto left = settings.limits.X.Min / scale / DELTA_TIME;
-    auto right = settings.limits.X.Max / scale / DELTA_TIME;
-    left = left < 0 ? 0. : left;
-    left = left >= data.size() ? data.size() : left;
-    right = right < 0 ? 0. : right;
-    right = right >= data.size() ? data.size() : right;
-    size_t size = right - left;
-    auto stride = std::max(1UL, size / PLOT_SAMPLES);
-    auto idxs =
-        rv::iota((size_t)round(left)) | rv::take(size) | rv::stride(stride);
-    auto xs =
-        idxs |
-        rv::transform([scale](auto e) { return e * DELTA_TIME * scale; }) |
-        ranges::to_vector;
-    auto ys = idxs | rv::transform([&data](auto e) { return data[e]; }) |
-              ranges::to_vector;
-
-    ImPlot::PlotLine(name.c_str(), xs.data(), ys.data(), xs.size());
-  }
-  ImPlot::EndPlot();
-}
-
 void drawScopeControls(ScopeSettings &settings, Scope &scope) {
-  ImGui::BeginDisabled(settings.disableControls);
+  ImGui::BeginGroup();
+  auto toggled = ImGui::Checkbox("Run", &settings.run);
 
-  if (ImGui::Checkbox("Run", &settings.run)) {
-  }
-  if (settings.run && !scope.isStreaming()) {
-    std::cout << "start" << std::endl;
-    auto temp = scope.startStream();
+  if (toggled && settings.run) {
     settings.recv = scope.startStream();
+    if (!settings.recv.has_value())
+      settings.run = false;
   }
-  if (!settings.run && scope.isStreaming()) {
-    std::cout << "stop" << std::endl;
+
+  if (toggled && !settings.run) {
     scope.stopStream();
     settings.recv = std::nullopt;
   }
@@ -241,19 +175,8 @@ void drawScopeControls(ScopeSettings &settings, Scope &scope) {
 
   ImGui::SameLine();
   ImGui::Checkbox("Follow", &settings.follow);
-  ImGui::SameLine();
 
-  static bool gen = false;
-  ImGui::Checkbox("Noise", &gen);
-  if (gen && !scope.isGenerating()) {
-    // scope.startNoise(2.0);
-    scope.startFreqSweep(1, 1000, 2.0, 0, 5, PS2000_UPDOWN);
-  }
-  if (!gen && scope.isGenerating()) {
-    scope.stopSigGen();
-  }
-
-  ImGui::PushItemWidth(ImGui::CalcTextSize("2000 mV").x);
+  ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.2);
   if (ImGui::BeginCombo("Voltage Range",
                         to_string(settings.voltageRange).c_str())) {
     static size_t selected_idx =
@@ -308,12 +231,94 @@ void drawScopeControls(ScopeSettings &settings, Scope &scope) {
     auto range = settings.limits.X.Max - settings.limits.X.Min;
     ImPlot::SetNextAxisLimits(ImAxis_X1, 0, 0 + range, ImGuiCond_Always);
   }
+  ImGui::EndGroup();
+}
 
-  ImGui::SeparatorText("Spectrum Analysis");
+void drawSigGenControls(ScopeSettings &settings, Scope &scope) {
+  ImGui::BeginGroup();
+  ImGui::BeginDisabled(settings.generate);
+  ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.35);
+  if (ImGui::BeginCombo("Signal",
+                        to_string(settings.selectedSigType).c_str())) {
+    static size_t selectedIdx =
+        ranges::find(SUPPORTED_SIGNALS, settings.selectedSigType) -
+        SUPPORTED_SIGNALS.begin();
+    ranges::for_each(ranges::views::enumerate(SUPPORTED_SIGNALS),
+                     [&settings](auto &&p) {
+                       auto &&[i, e] = p;
+                       auto selected = i == selectedIdx;
+                       if (ImGui::Selectable(to_string(e).c_str(), selected)) {
+                         selectedIdx = i;
+                         if (settings.selectedSigType != e) {
+                           settings.selectedSigType = e;
+                         }
+                       }
+                       if (selected) {
+                         ImGui::SetItemDefaultFocus();
+                       }
+                     });
+    ImGui::EndCombo();
+  }
+  ImGui::EndDisabled();
 
-  ImGui::PushItemWidth(ImGui::CalcTextSize("100000").x);
-  if (ImGui::BeginCombo("Window Size",
-                        std::format("{}", settings.windowSize).c_str())) {
+  ImGui::SameLine();
+
+  settings.generate = scope.isGenerating();
+  auto toggled = ImGui::Checkbox("Generate", &settings.generate);
+  if (toggled && settings.generate) {
+    switch (settings.selectedSigType) {
+    case (SigGen::FreqSweep):
+      drawSweepSettings(settings.freqSweepSettings);
+      if (settings.generate && !scope.isGenerating()) {
+        scope.startFreqSweep(settings.freqSweepSettings.startFreq,
+                             settings.freqSweepSettings.endFreq, 2., 0,
+                             settings.freqSweepSettings.sweepDuration,
+                             PS2000_UPDOWN);
+      }
+      break;
+    case (SigGen::Noise):
+      if (settings.generate && !scope.isGenerating() && !scope.startNoise(2.)) {
+        settings.generate = false;
+      }
+      break;
+    }
+  }
+  if (toggled && !settings.generate) {
+    scope.stopSigGen();
+  }
+  if (settings.selectedSigType == SigGen::FreqSweep) {
+    drawSweepSettings(settings.freqSweepSettings);
+  }
+  ImGui::EndGroup();
+}
+
+void drawSweepSettings(FreqSweepSettings &settings) {
+  auto avail = ImGui::GetContentRegionAvail();
+  auto flags = ImGuiInputTextFlags_CharsNoBlank |
+               ImGuiInputTextFlags_CharsDecimal |
+               ImGuiInputTextFlags_ParseEmptyRefVal;
+
+  ImGui::PushItemWidth(0.2 * avail.x);
+
+  ImGui::InputDouble("Start", &settings.startFreq, 50., 500., "%.2f", flags);
+  ImGui::SameLine();
+  ImGui::InputDouble("End", &settings.endFreq, 50., 500., "%.2f", flags);
+  ImGui::SameLine();
+  ImGui::InputDouble("Duration", &settings.sweepDuration, 5., 20., "%.2f",
+                     flags);
+  ImGui::PopItemWidth();
+
+  settings.startFreq = std::max(settings.startFreq, 20.);
+  settings.endFreq = std::min(settings.endFreq, 20000.);
+  settings.sweepDuration = std::max(settings.sweepDuration, 1.);
+  settings.sweepDuration = std::min(settings.sweepDuration, 30.);
+}
+
+void drawSpectrumControls(ScopeSettings &settings) {
+  ImGui::BeginGroup();
+  auto windowSize_str = std::format("{}", settings.windowSize);
+  ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.2);
+  if (ImGui::BeginCombo("Window Size", windowSize_str.c_str())) {
     static const auto powers =
         ranges::views::iota(5) | ranges::views::take(15) | ranges::to_vector;
     static size_t selected_idx =
@@ -339,15 +344,111 @@ void drawScopeControls(ScopeSettings &settings, Scope &scope) {
     });
     ImGui::EndCombo();
   }
-  ImGui::PopItemWidth();
 
   ImGui::SameLine();
   if (ImGui::Checkbox("Spectrum", &settings.showSpectrum)) {
     std::cout << "test" << std::endl;
     settings.resetScopeWindow = true;
   }
+  ImGui::EndGroup();
+}
 
-  ImGui::EndDisabled();
+void drawControls(ScopeSettings &settings, Scope &scope) {
+  if (ImGui::BeginTable("Full Controls", 2,
+                        ImGuiTableFlags_BordersInnerV |
+                            ImGuiTableFlags_Resizable,
+                        {ImGui::GetContentRegionAvail().x, 0.})) {
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    drawScopeControls(settings, scope);
+    ImGui::TableSetColumnIndex(1);
+    drawSigGenControls(settings, scope);
+    ImGui::EndTable();
+  }
+
+  ImGui::SeparatorText("Spectrum Controls");
+  drawSpectrumControls(settings);
+}
+
+} // namespace
+
+void drawScope(ScopeSettings &settings, Scope &scope) {
+  static uint32_t frame = 0;
+  ++frame;
+
+  if (!ImPlot::BeginPlot("##Oscilloscope", ImGui::GetContentRegionAvail())) {
+    return;
+  }
+
+  if (settings.recv.has_value()) {
+    sr::for_each(settings.recv->flush_no_block(), [&settings](const auto &e) {
+      settings.dataA.insert(settings.dataA.end(), e.dataA.begin(),
+                            e.dataA.end());
+      settings.dataB.insert(settings.dataB.end(), e.dataB.begin(),
+                            e.dataB.end());
+      settings.updateSpectrum = true;
+    });
+  }
+
+  ImPlot::SetupAxes(to_string(settings.timebase).c_str(),
+                    to_string(settings.voltageRange).c_str());
+  auto vLimits = to_limits(settings.voltageRange);
+  ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, vLimits.x, vLimits.y);
+  ImPlot::SetupAxisLimits(ImAxis_Y1, vLimits.x, vLimits.y);
+  ImPlot::SetupAxisLimits(ImAxis_X1, settings.limits.X.Min,
+                          settings.limits.X.Max);
+
+  if (settings.follow && scope.isStreaming() && frame % 5 == 0) {
+    double latest = DELTA_TIME *
+                    std::max(settings.dataA.size(), settings.dataB.size()) *
+                    to_scale(settings.timebase);
+    if (latest > settings.limits.X.Max || latest < settings.limits.X.Min) {
+      auto range = settings.limits.X.Max - settings.limits.X.Min;
+      ImPlot::SetupAxisLimits(ImAxis_X1, latest - range, latest,
+                              ImPlotCond_Always);
+    }
+  } else {
+    auto temp = ImPlot::GetPlotLimits();
+    if (std::abs(temp.X.Min - settings.limits.X.Min) > 1e-6 ||
+        std::abs(temp.X.Max - settings.limits.X.Max) > 1e-6) {
+      settings.updateSpectrum = true;
+    }
+    settings.limits = temp;
+  }
+
+  for (int i = 0; i < 2; ++i) {
+    std::string name;
+    const std::vector<double> &data = ([i, &settings, &name]() {
+      if (i == 0) {
+        name = "Channel A";
+        return settings.dataA;
+      } else {
+        name = "Channel B";
+        return settings.dataB;
+      }
+    })();
+
+    auto scale = to_scale(settings.timebase);
+    auto left = settings.limits.X.Min / scale / DELTA_TIME;
+    auto right = settings.limits.X.Max / scale / DELTA_TIME;
+    left = left < 0 ? 0. : left;
+    left = left >= data.size() ? data.size() : left;
+    right = right < 0 ? 0. : right;
+    right = right >= data.size() ? data.size() : right;
+    size_t size = right - left;
+    auto stride = std::max(1UL, size / PLOT_SAMPLES);
+    auto idxs =
+        rv::iota((size_t)round(left)) | rv::take(size) | rv::stride(stride);
+    auto xs =
+        idxs |
+        rv::transform([scale](auto e) { return e * DELTA_TIME * scale; }) |
+        ranges::to_vector;
+    auto ys = idxs | rv::transform([&data](auto e) { return data[e]; }) |
+              ranges::to_vector;
+
+    ImPlot::PlotLine(name.c_str(), xs.data(), ys.data(), xs.size());
+  }
+  ImPlot::EndPlot();
 }
 
 void ScopeSettings::clearData() {
@@ -480,7 +581,7 @@ void drawScopeTab(ScopeSettings &settings, Scope &scope) {
     ImGui::EndChild();
   }
   if (ImGui::BeginChild("Controls", ImGui::GetContentRegionAvail(), 0)) {
-    drawScopeControls(settings, scope);
+    drawControls(settings, scope);
     ImGui::EndChild();
   }
 }

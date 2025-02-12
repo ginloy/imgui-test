@@ -10,8 +10,15 @@
 #include <vector>
 
 enum class TimeBase { US, MS, S };
+enum class SigGen { Noise , FreqSweep };
 
 inline constexpr TimeBase DEFAULT_TIMEBASE = TimeBase::S;
+
+struct FreqSweepSettings {
+  double startFreq = 1.;
+  double endFreq = 1000.;
+  double sweepDuration = 5.;
+};
 
 struct ScopeSettings {
   enPS2000Range voltageRange = DEFAULT_VOLTAGE_RANGE;
@@ -19,10 +26,14 @@ struct ScopeSettings {
   ImPlotRect limits = {0, 10, -10, 10};
   ImPlotRect spectrumLimits = {0, 20e3, -100, 100};
   size_t windowSize = 1 << 16;
-    
+
+  SigGen selectedSigType = SigGen::Noise;
+  FreqSweepSettings freqSweepSettings;
+
   bool disableControls = false;
   bool run = false;
   bool follow = false;
+  bool generate = false;
   bool showSpectrum = false;
   bool resetScopeWindow = false;
   bool updateSpectrum = false;
@@ -36,7 +47,6 @@ struct ScopeSettings {
 };
 
 void drawScope(ScopeSettings &settings, Scope &scope);
-void drawScopeControls(ScopeSettings &settings, Scope &scope);
 void drawScopeTab(ScopeSettings &settings, Scope &scope);
 
 #endif
