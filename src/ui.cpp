@@ -369,7 +369,6 @@ void drawSpectrum(ScopeSettings &settings) {
         while (true) {
           auto data = recv.flush();
           if (data.empty()) {
-            std::this_thread::sleep_for(100ms);
             continue;
           }
 
@@ -414,7 +413,7 @@ void drawSpectrum(ScopeSettings &settings) {
     settings.updateSpectrum = false;
   }
 
-  auto result = recvResult.flush();
+  auto result = recvResult.flush_no_block();
   if (!result.empty()) {
     ys = std::move(result.back());
   }

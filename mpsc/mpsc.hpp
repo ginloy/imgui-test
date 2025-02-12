@@ -2,6 +2,7 @@
 #define MPSC_HPP
 
 #include <concepts>
+#include <iostream>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -56,7 +57,7 @@ public:
   public:
     Recv(const Recv<T> &other) = delete;
     Recv(Recv<T> &&other) : data(std::move(other.data)) {}
-    Recv<T>& operator=(Recv<T> &&other) {
+    Recv<T> &operator=(Recv<T> &&other) {
       data = std::move(other.data);
       return *this;
     }
@@ -91,6 +92,22 @@ public:
     }
 
     std::vector<T> flush() {
+      std::vector<T> res;
+      if (!data) {
+        return res;
+      }
+      data->sem.acquire();
+      std::unique_lock temp{data->lock};
+      res.push_back(std::move(data->queue.front()));
+      data->queue.pop();
+      while (data->sem.try_acquire()) {
+        res.push_back(std::move(data->queue.front()));
+        data->queue.pop();
+      }
+      return res;
+    }
+
+    std::vector<T> flush_no_block() {
       std::vector<T> res;
       if (!data) {
         return res;
