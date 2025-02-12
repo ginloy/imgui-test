@@ -3,7 +3,6 @@
 
 #include <complex>
 #include <fftw3.h>
-#include <iostream>
 #include <mutex>
 #include <range/v3/all.hpp>
 #include <ranges>
@@ -97,7 +96,7 @@ std::vector<double> welch(DoubleRange auto &&dataA, DoubleRange auto &&dataB,
 
     std::mutex lock;
 
-    #pragma omp parallel for
+#pragma omp parallel for
     for (size_t left = 0; left < limit; left += stride) {
       size_t right = left + windowSize;
       auto a = dataA | rv::slice(left, right > N ? N : right);
@@ -120,14 +119,14 @@ std::vector<double> welch(DoubleRange auto &&dataA, DoubleRange auto &&dataB,
                     return temp * temp;
                   });
 
-      #pragma omp critical
+#pragma omp critical
       {
         ranges::for_each(rv::enumerate(tnsf), [&total](auto &&p) {
           auto &&[i, e] = std::forward<decltype(p)>(p);
           total[i] += e;
         });
       }
-      #pragma omp atomic update
+#pragma omp atomic update
       ++count;
     }
   }
