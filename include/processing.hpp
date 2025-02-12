@@ -49,7 +49,7 @@ std::vector<std::complex<double>> fft(DoubleRange auto &&input,
 
   fftw_execute(p);
 
-  auto outComplex = std::ranges::subrange(out, out + N_out) |
+  auto outComplex = std::span(out, N_out) |
                     std::views::transform([N](auto &&e) {
                       return std::complex<double>{e[0] / N, e[1] / N} * 2.;
                     }) |
