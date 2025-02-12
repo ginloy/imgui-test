@@ -6,6 +6,7 @@
 // + read the top of imgui.cpp. Read online:
 // https://github.com/ocornut/imgui/tree/master/docs
 
+#include <format>
 #define _USE_MATH_DEFINES
 
 #include "globals.hpp"
@@ -14,7 +15,6 @@
 #include "processing.hpp"
 #include "ui.hpp"
 
-#include <chrono>
 #include <cmath>
 #include <complex>
 #include <cstdio>
@@ -253,7 +253,7 @@ int main(int, char **) {
   if (!glfwInit())
     return 1;
 
-    // Decide GL+GLSL versions
+  // Decide GL+GLSL versions
 #if defined(IMGUI_IMPL_OPENGL_ES2)
   // GL ES 2.0 + GLSL 100
   const char *glsl_version = "#version 100";
@@ -358,8 +358,8 @@ int main(int, char **) {
     // 1. Show the big demo window (Most of the sample code is in
     // ImGui::ShowDemoWindow()! You can browse its code to learn more about
     // Dear ImGui!).
-    if (show_demo_window)
-      ImGui::ShowDemoWindow(&show_demo_window);
+    // if (show_demo_window)
+    //   ImGui::ShowDemoWindow(&show_demo_window);
 
     // 2. Show a simple window that we create ourselves. We use a Begin/End
     // pair to created a named window.
@@ -427,36 +427,25 @@ int main(int, char **) {
         ImGui::EndTabItem();
       }
 
-      if (ImGui::BeginTabItem("Tests")) {
-        static int testDuration = 3;
-        static int startFreq = 50;
-        static int endFreq = 2000;
-        ImGui::SeparatorText("White Noise");
-        // ImGui::SetNextItemWidth(20.0 * ImGui::GetFontSize());
-        ImGui::SliderInt("Duration##01", &testDuration, 1, 30, "%d Seconds",
-                         ImGuiSliderFlags_AlwaysClamp);
-        ImGui::SameLine();
-        ImGui::Button("Run##1");
-
-        ImGui::SeparatorText("Frequency Sweep");
-        ImGui::PushItemWidth(20.0 * ImGui::GetFontSize());
-        ImGui::DragInt("Start", &startFreq, 5, 20, 1000, "%d Hz",
-                       ImGuiSliderFlags_AlwaysClamp);
-        ImGui::SameLine();
-        ImGui::DragInt("End", &endFreq, 5, 100, 3000, "%d Hz",
-                       ImGuiSliderFlags_AlwaysClamp);
-        ImGui::PopItemWidth();
-        ImGui::SliderInt("Duration##02", &testDuration, 1, 30, "%d Seconds",
-
-                         ImGuiSliderFlags_AlwaysClamp);
-        ImGui::SameLine();
-        ImGui::Button("Run##2");
-
-        ImGui::EndTabItem();
-      }
-
       ImGui::EndTabBar();
     }
+    ImGui::End();
+
+    auto text = std::format("{:.2f} FPS", ImGui::GetIO().Framerate);
+    auto size = ImGui::CalcTextSize(text.c_str());
+    auto windowPadding = ImGui::GetStyle().WindowPadding;
+    auto framePadding = ImGui::GetStyle().FramePadding;
+    ImGui::SetNextWindowSize({size.x + (framePadding.x + windowPadding.x) * 2,
+                              size.y + (framePadding.y + windowPadding.y) * 2});
+    ImGui::SetNextWindowPos({ImGui::GetIO().DisplaySize.x - size.x -
+                                 framePadding.x - windowPadding.x - 10.f,
+                             0.f + 5.f});
+    ImGui::SetNextWindowBgAlpha(0.75);
+    ImGui::Begin("FPS Overlay", nullptr,
+                 ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoDecoration |
+                     ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoNav |
+                     ImGuiWindowFlags_NoInputs);
+    ImGui::TextUnformatted(text.c_str());
     ImGui::End();
 
     // ImPlot::ShowDemoWindow(nullptr);
