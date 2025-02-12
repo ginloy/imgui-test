@@ -15,6 +15,8 @@ target("imgui-test")
     add_linkdirs("libps2000")
   end
   if is_os("macosx") then
+    add_cxflags("-fopenmp")
+    add_ldflags("-fopenmp")
     add_includedirs("/Library/Frameworks/PicoSDK.framework/Headers")
     add_linkdirs("/Library/Frameworks/PicoSDK.framework/Libraries/libps2000")
   end
