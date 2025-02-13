@@ -3,6 +3,9 @@ add_rules("mode.debug", "mode.release")
 add_requires("imgui", { configs = { glfw_opengl3 = true } })
 add_requires("gtest", { configs = { main = true } })
 add_requires("opengl", "implot", "fftw", "range-v3")
+if is_os("windows") then
+  add_requires("openmp")
+end
 
 set_languages("c++23")
 
@@ -13,6 +16,7 @@ target("imgui-test")
   if is_os("windows") then
     add_includedirs(".")
     add_linkdirs("libps2000")
+    add_packages("openmp")
   end
   if is_os("macosx") then
     add_cxflags("-fopenmp")
