@@ -1,8 +1,9 @@
 # Xmake cache
 .xmake/
 build/
-ps2000/
+libps2000/
 .cache
+.clangd
 .direnv
 .envrc
 compile_commands.json
