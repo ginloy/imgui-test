@@ -10,7 +10,6 @@
 #define _USE_MATH_DEFINES
 
 #include "globals.hpp"
-#include "libps2000/ps2000.h"
 #include "pico.hpp"
 #include "processing.hpp"
 #include "ui.hpp"
