@@ -2,6 +2,7 @@
 #define PROCESSING_HPP
 
 #include <complex>
+#include <concepts>
 #include <fftw3.h>
 #include <mutex>
 #include <range/v3/all.hpp>
@@ -97,10 +98,10 @@ std::vector<double> welch(DoubleRange auto &&dataA, DoubleRange auto &&dataB,
     std::mutex lock;
 
 #pragma omp parallel for
-    for (size_t left = 0; left < limit; left += stride) {
-      size_t right = left + windowSize;
-      auto a = dataA | rv::slice(left, right > N ? N : right);
-      auto b = dataB | rv::slice(left, right > N ? N : right);
+    for (int left = 0; left < limit; left += stride) {
+      int right = left + windowSize;
+      auto a = dataA | rv::slice(left, right > N ? static_cast<int>(N) : right);
+      auto b = dataB | rv::slice(left, right > N ? static_cast<int>(N) : right);
 
       size_t pad = right > N ? right - N : 0;
       auto padrng = rv::repeat_n(0., pad);
@@ -126,7 +127,7 @@ std::vector<double> welch(DoubleRange auto &&dataA, DoubleRange auto &&dataB,
           total[i] += e;
         });
       }
-#pragma omp atomic update
+#pragma omp atomic
       ++count;
     }
   }
