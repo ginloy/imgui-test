@@ -2,7 +2,8 @@
 
 #include <cmath>
 #include <range/v3/all.hpp>
+#include <numbers>
 
 double hann(size_t n, size_t N) {
-  return 0.5 * (1 - std::cos(2 * M_PI * n / (N - 1)));
+  return 0.5 * (1 - std::cos(2 * std::numbers::pi * n / (N - 1)));
 }

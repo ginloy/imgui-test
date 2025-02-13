@@ -2,16 +2,16 @@
 #include "pico.hpp"
 #include "processing.hpp"
 
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <format>
 #include <imgui.h>
 #include <implot.h>
 #include <iostream>
-#include <iterator>
 #include <libps2000/ps2000.h>
+#include <numbers>
 #include <range/v3/all.hpp>
-#include <range/v3/range/conversion.hpp>
 #include <ranges>
 #include <thread>
 
@@ -436,7 +436,7 @@ void drawScope(ScopeSettings &settings, Scope &scope) {
     right = right < 0 ? 0. : right;
     right = right >= data.size() ? data.size() : right;
     size_t size = right - left;
-    auto stride = std::max(1UL, size / PLOT_SAMPLES);
+    auto stride = std::max(static_cast<size_t>(1), size / PLOT_SAMPLES);
     auto idxs =
         rv::iota((size_t)round(left)) | rv::take(size) | rv::stride(stride);
     auto xs =
@@ -589,10 +589,12 @@ void drawScopeTab(ScopeSettings &settings, Scope &scope) {
 void ScopeSettings::fillRandomData(size_t samples) {
   auto iota = sv::iota(0) |
               sv::transform([](auto e) { return (double)e * DELTA_TIME; });
-  auto dataA = iota | sv::transform(
-                          [](auto e) { return 2. * sin(2 * M_PI * 1000 * e); });
-  auto dataB =
-      iota | sv::transform([](auto e) { return sin(2 * M_PI * 500 * e); });
+  auto dataA = iota | sv::transform([](auto e) {
+                 return 2. * sin(2 * std::numbers::pi * 1000 * e);
+               });
+  auto dataB = iota | sv::transform([](auto e) {
+                 return sin(2 * std::numbers::pi * 500 * e);
+               });
 
   auto randomData =
       iota | sv::transform([](auto e) { return (double)rand() / RAND_MAX; });
