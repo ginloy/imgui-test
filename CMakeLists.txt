@@ -16,16 +16,19 @@ FetchContent_Declare(
   FFTW3
   URL https://www.fftw.org/fftw-3.3.10.tar.gz
   URL_HASH MD5=8ccbf6a5ea78a16dbc3e1306e234cc5c
+  FIND_PACKAGE_ARGS NAMES FFTW3
 )
 FetchContent_Declare(
   glfw3
   GIT_REPOSITORY https://github.com/glfw/glfw.git
   GIT_TAG 3.4
+  FIND_PACKAGE_ARGS NAMES glfw3
 )
 FetchContent_Declare(
   range-v3
   GIT_REPOSITORY https://github.com/ericniebler/range-v3.git
   GIT_TAG 0.12.0
+  FIND_PACKAGE_ARGS NAMES range-v3
 )
 FetchContent_MakeAvailable(FFTW3 glfw3 range-v3)
 
