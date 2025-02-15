@@ -14,6 +14,8 @@ in
       pkg-config
       linuxPackages_latest.perf
       clang-tools
+      cmake-language-server
+      cmake-format
     ];
 
     buildInputs = with pkgs; [

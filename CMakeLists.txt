@@ -11,6 +11,7 @@ set(BUILD_SHARED_LIBS off)
 
 project(imgui-test LANGUAGES CXX C)
 
+include(CTest)
 include(FetchContent)
 FetchContent_Declare(
   FFTW3
