@@ -30,7 +30,13 @@ FetchContent_Declare(
   GIT_TAG 0.12.0
   FIND_PACKAGE_ARGS NAMES range-v3
 )
-FetchContent_MakeAvailable(FFTW3 glfw3 range-v3)
+FetchContent_Declare(
+  gTest
+  GIT_REPOSITORY https://github.com/google/googletest.git
+  GIT_TAG v1.16.0
+  FIND_PACKAGE_ARGS NAMES GTest
+)
+FetchContent_MakeAvailable(FFTW3 glfw3 range-v3 gTest)
 
 add_subdirectory(extern)
 add_subdirectory(mpsc)
