@@ -2,11 +2,11 @@
 #define MPSC_HPP
 
 #include <concepts>
+#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <queue>
-#include <semaphore>
 
 class mpsc {
 
@@ -15,11 +15,9 @@ class mpsc {
   template <typename T> struct Data {
     std::queue<T> queue;
     std::mutex lock;
-    std::counting_semaphore<> sem;
+    std::condition_variable cond;
 
-    explicit Data()
-        : queue(std::queue<T>{}), lock(std::mutex{}),
-          sem(std::counting_semaphore<>{0}) {}
+    explicit Data() {}
   };
 
 public:
@@ -39,7 +37,7 @@ public:
       Data<T> &data = *(this->data.lock());
       std::unique_lock temp{data.lock};
       data.queue.push(std::forward<U>(res));
-      data.sem.release();
+      data.cond.notify_one();
       return true;
     }
   };
@@ -69,8 +67,8 @@ public:
       if (!data) {
         return std::nullopt;
       }
-      data->sem.acquire();
-      std::unique_lock temp{data->lock};
+      std::unique_lock lock{data->lock};
+      data->cond.wait(lock, [this]() { return !data->queue.empty(); });
       T res = std::move(data->queue.front());
       data->queue.pop();
       return {std::move(res)};
@@ -80,14 +78,13 @@ public:
       if (!data) {
         return std::nullopt;
       }
-      if (data->sem.try_acquire()) {
-        std::unique_lock temp{data->lock};
-        T res = std::move(data->queue.front());
-        data->queue.pop();
-        return std::optional<T>(std::move(res));
-      } else {
+      std::unique_lock lock{data->lock};
+      if (data->queue.empty()) {
         return std::nullopt;
       }
+      T res = std::move(data->queue.front());
+      data->queue.pop();
+      return std::optional<T>(std::move(res));
     }
 
     std::vector<T> flush() {
@@ -95,11 +92,9 @@ public:
       if (!data) {
         return res;
       }
-      data->sem.acquire();
-      std::unique_lock temp{data->lock};
-      res.push_back(std::move(data->queue.front()));
-      data->queue.pop();
-      while (data->sem.try_acquire()) {
+      std::unique_lock lock{data->lock};
+      data->cond.wait(lock, [this]() { return !data->queue.empty(); });
+      while (!data->queue.empty()) {
         res.push_back(std::move(data->queue.front()));
         data->queue.pop();
       }
@@ -111,8 +106,8 @@ public:
       if (!data) {
         return res;
       }
-      std::unique_lock temp{data->lock};
-      while (data->sem.try_acquire()) {
+      std::unique_lock lock{data->lock};
+      while (!data->queue.empty()) {
         res.push_back(std::move(data->queue.front()));
         data->queue.pop();
       }
