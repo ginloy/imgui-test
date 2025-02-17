@@ -13,6 +13,7 @@
 inline constexpr double OVERLAP = 0.5;
 double hann(size_t n, size_t N);
 double hamming(size_t n, size_t N);
+double blackman(size_t n, size_t N);
 
 template <typename T>
 concept DoubleRange = requires(T a) {
@@ -21,10 +22,12 @@ concept DoubleRange = requires(T a) {
 };
 
 using WindowFunction = std::function<double(size_t, size_t)>;
+inline const std::array availableWindows{hann, hamming, blackman};
 
 auto applyWindow(DoubleRange auto &&in, WindowFunction f = hann) {
   size_t N = ranges::distance(in);
-  return ranges::views::enumerate(in) | ranges::views::transform([N, f](auto &&p) {
+  return ranges::views::enumerate(in) |
+         ranges::views::transform([N, f](auto &&p) {
            auto &&[i, e] = std::forward<decltype(p)>(p);
            return f(i, N) * e;
          });
