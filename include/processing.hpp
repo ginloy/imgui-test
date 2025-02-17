@@ -22,7 +22,7 @@ concept DoubleRange = requires(T a) {
 };
 
 using WindowFunction = std::function<double(size_t, size_t)>;
-inline const std::array AVAILABLE_WINDOWS{hann, hamming, blackman};
+inline constexpr std::array AVAILABLE_WINDOWS{hann, hamming, blackman};
 
 auto applyWindow(DoubleRange auto &&in, WindowFunction f = hann) {
   size_t N = ranges::distance(in);
