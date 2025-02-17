@@ -4,6 +4,7 @@
 #include <complex>
 #include <concepts>
 #include <fftw3.h>
+#include <functional>
 #include <mutex>
 #include <range/v3/all.hpp>
 #include <ranges>
@@ -18,11 +19,13 @@ concept DoubleRange = requires(T a) {
   requires std::ranges::range<T>;
 };
 
-auto hann(DoubleRange auto &&in) {
+using WindowFunction = std::function<double(size_t, size_t)>;
+
+auto applyWindow(DoubleRange auto &&in, WindowFunction f = hann) {
   size_t N = ranges::distance(in);
-  return ranges::views::enumerate(in) | ranges::views::transform([N](auto &&p) {
+  return ranges::views::enumerate(in) | ranges::views::transform([N, f](auto &&p) {
            auto &&[i, e] = std::forward<decltype(p)>(p);
-           return hann(i, N) * e;
+           return f(i, N) * e;
          });
 }
 
@@ -86,8 +89,8 @@ std::vector<double> welch(DoubleRange auto &&dataA, DoubleRange auto &&dataB,
   std::vector<std::complex<double>> total(windowSize / 2 + 1, {0., 0.});
 
   if (N <= windowSize) {
-    auto a = fft(hann(dataA));
-    auto b = fft(hann(dataB));
+    auto a = fft(applyWindow(dataA));
+    auto b = fft(applyWindow(dataB));
     auto tnsf = rv::zip(a, b) | rv::transform([](auto &&p) {
                   return std::pow(p.first / p.second, 2);
                 });
@@ -108,8 +111,8 @@ std::vector<double> welch(DoubleRange auto &&dataA, DoubleRange auto &&dataB,
       auto aPadded = rv::concat(a, padrng);
       auto bPadded = rv::concat(b, padrng);
 
-      auto aHanned = hann(aPadded);
-      auto bHanned = hann(bPadded);
+      auto aHanned = applyWindow(aPadded);
+      auto bHanned = applyWindow(bPadded);
 
       auto aTrans = fft(aHanned, &lock);
       auto bTrans = fft(bHanned, &lock);
