@@ -47,7 +47,7 @@ find_package(OpenMP REQUIRED)
 
 add_executable(${PROJECT_NAME})
 add_subdirectory(src)
-target_include_directories(${PROJECT_NAME} PRIVATE include)
+add_subdirectory(include)
 target_link_libraries(${PROJECT_NAME} PRIVATE glfw ps2000 OpenMP::OpenMP_CXX OpenGL::GL imgui implot imgui-backends range-v3::range-v3 mpsc fftw3)
 
 if (DEFINED FFTW3_FOUND)
