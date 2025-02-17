@@ -12,6 +12,7 @@
 
 inline constexpr double OVERLAP = 0.5;
 double hann(size_t n, size_t N);
+double hamming(size_t n, size_t N);
 
 template <typename T>
 concept DoubleRange = requires(T a) {
