@@ -179,27 +179,23 @@ void drawScopeControls(ScopeSettings &settings, Scope &scope) {
   ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.2);
   if (ImGui::BeginCombo("Voltage Range",
                         to_string(settings.voltageRange).c_str())) {
-    static size_t selected_idx =
-        sr::distance(SUPPORTED_RANGES | sv::take_while([](const auto e) {
-                       return e != DEFAULT_VOLTAGE_RANGE;
-                     }));
-    sr::for_each(rv::enumerate(SUPPORTED_RANGES),
-                 [&settings, &scope](auto pair) {
-                   auto [i, v] = pair;
-                   const bool selected = i == selected_idx;
-                   if (ImGui::Selectable(to_string(v).c_str(), selected)) {
-                     selected_idx = i;
-                     auto range = SUPPORTED_RANGES[i];
-                     settings.voltageRange = range;
-                     scope.setVoltageRange(range);
-                     auto new_limits = to_limits(range);
-                     ImPlot::SetNextAxisLimits(ImAxis_Y1, new_limits.x,
-                                               new_limits.y, ImGuiCond_Always);
-                   }
-                   if (selected) {
-                     ImGui::SetItemDefaultFocus();
-                   }
-                 });
+    sr::for_each(
+        rv::enumerate(SUPPORTED_RANGES), [&settings, &scope](auto pair) {
+          auto [i, v] = pair;
+          const bool selected = settings.voltageRange == v;
+          if (ImGui::Selectable(to_string(v).c_str(), selected)) {
+            if (settings.voltageRange != v) {
+              settings.voltageRange = v;
+              scope.setVoltageRange(v);
+              auto new_limits = to_limits(v);
+              ImPlot::SetNextAxisLimits(ImAxis_Y1, new_limits.x, new_limits.y,
+                                        ImGuiCond_Always);
+            }
+          }
+          if (selected) {
+            ImGui::SetItemDefaultFocus();
+          }
+        });
     ImGui::EndCombo();
   }
 
@@ -344,12 +340,34 @@ void drawSpectrumControls(ScopeSettings &settings) {
     });
     ImGui::EndCombo();
   }
+  auto prevSize = ImGui::GetItemRectSize();
 
   ImGui::SameLine();
   if (ImGui::Checkbox("Spectrum", &settings.showSpectrum)) {
     std::cout << "test" << std::endl;
     settings.resetScopeWindow = true;
   }
+
+  ImGui::SetNextItemWidth(prevSize.x);
+  if (ImGui::BeginCombo("Window Function", settings.windowFn.c_str())) {
+    ranges::for_each(rv::enumerate(WINDOW_MAP), [&](auto &&p) {
+      auto &&[i, e] = p;
+      auto &&[s, f] = e;
+      bool selected = s == settings.windowFn;
+      if (ImGui::Selectable(s.c_str(), selected)) {
+        if (settings.windowFn != s) {
+          settings.updateSpectrum = true;
+          settings.windowFn = s;
+        }
+      }
+      if (selected) {
+        ImGui::SetItemDefaultFocus();
+      }
+    });
+
+    ImGui::EndCombo();
+  }
+
   ImGui::EndGroup();
 }
 
@@ -462,8 +480,9 @@ void drawSpectrum(ScopeSettings &settings) {
   using namespace std::chrono_literals;
   static bool first = true;
   static auto [sendResult, recvResult] = mpsc::make<std::vector<double>>();
-  static auto [sendData, recvData] = mpsc::make<
-      std::tuple<std::vector<double>, std::vector<double>, size_t>>();
+  static auto [sendData, recvData] =
+      mpsc::make<std::tuple<std::vector<double>, std::vector<double>, size_t,
+                            WindowFunction>>();
   static std::vector<double> ys;
   static std::thread thread{
       [recv = std::move(recvData), send = std::move(sendResult)]() mutable {
@@ -473,8 +492,9 @@ void drawSpectrum(ScopeSettings &settings) {
             continue;
           }
 
-          auto &&[dataA, dataB, windowSize] = std::move(data.back());
-          auto &&res = welch(std::move(dataA), std::move(dataB), windowSize);
+          auto &&[dataA, dataB, windowSize, windowFn] = std::move(data.back());
+          auto &&res =
+              welch(std::move(dataA), std::move(dataB), windowSize, windowFn);
 
           send.send(std::move(res));
         }
@@ -508,8 +528,9 @@ void drawSpectrum(ScopeSettings &settings) {
 
     auto dataA = settings.dataA | rv::slice(left, right) | ranges::to_vector;
     auto dataB = settings.dataB | rv::slice(left, right) | ranges::to_vector;
-    sendData.send(
-        std::tuple{std::move(dataA), std::move(dataB), settings.windowSize});
+    sendData.send(std::tuple{std::move(dataA), std::move(dataB),
+                             settings.windowSize,
+                             WINDOW_MAP.at(settings.windowFn)});
 
     settings.updateSpectrum = false;
   }

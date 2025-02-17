@@ -8,6 +8,7 @@
 #include <mutex>
 #include <range/v3/all.hpp>
 #include <ranges>
+#include <unordered_map>
 #include <vector>
 
 inline constexpr double OVERLAP = 0.5;
@@ -23,6 +24,8 @@ concept DoubleRange = requires(T a) {
 
 using WindowFunction = std::function<double(size_t, size_t)>;
 inline constexpr std::array AVAILABLE_WINDOWS{hann, hamming, blackman};
+inline const std::unordered_map<std::string, WindowFunction> WINDOW_MAP{
+    {"Hann", hann}, {"Hamming", hamming}, {"Blackman", blackman}};
 
 auto applyWindow(DoubleRange auto &&in, WindowFunction f = hann) {
   size_t N = ranges::distance(in);
@@ -79,7 +82,7 @@ std::vector<std::complex<double>> fft(DoubleRange auto &&input,
 }
 
 std::vector<double> welch(DoubleRange auto &&dataA, DoubleRange auto &&dataB,
-                          size_t windowSize = 1024) {
+                          size_t windowSize = 1024, WindowFunction windowFn = hann) {
   namespace rv = ranges::views;
   const size_t N = ranges::distance(dataA);
   if (N < 10 || ranges::distance(dataB) != N) {
@@ -93,8 +96,8 @@ std::vector<double> welch(DoubleRange auto &&dataA, DoubleRange auto &&dataB,
   std::vector<std::complex<double>> total(windowSize / 2 + 1, {0., 0.});
 
   if (N <= windowSize) {
-    auto a = fft(applyWindow(dataA));
-    auto b = fft(applyWindow(dataB));
+    auto a = fft(applyWindow(dataA, windowFn));
+    auto b = fft(applyWindow(dataB, windowFn));
     auto tnsf = rv::zip(a, b) | rv::transform([](auto &&p) {
                   return std::pow(p.first / p.second, 2);
                 });
@@ -115,8 +118,8 @@ std::vector<double> welch(DoubleRange auto &&dataA, DoubleRange auto &&dataB,
       auto aPadded = rv::concat(a, padrng);
       auto bPadded = rv::concat(b, padrng);
 
-      auto aHanned = applyWindow(aPadded);
-      auto bHanned = applyWindow(bPadded);
+      auto aHanned = applyWindow(aPadded, windowFn);
+      auto bHanned = applyWindow(bPadded, windowFn);
 
       auto aTrans = fft(aHanned, &lock);
       auto bTrans = fft(bHanned, &lock);

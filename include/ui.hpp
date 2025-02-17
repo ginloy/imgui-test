@@ -3,6 +3,7 @@
 
 #include "mpsc.hpp"
 #include "pico.hpp"
+#include "processing.hpp"
 
 #include <implot.h>
 #include <libps2000/ps2000.h>
@@ -10,7 +11,7 @@
 #include <vector>
 
 enum class TimeBase { US, MS, S };
-enum class SigGen { Noise , FreqSweep };
+enum class SigGen { Noise, FreqSweep };
 
 inline constexpr TimeBase DEFAULT_TIMEBASE = TimeBase::S;
 
@@ -26,6 +27,7 @@ struct ScopeSettings {
   ImPlotRect limits = {0, 10, -10, 10};
   ImPlotRect spectrumLimits = {0, 20e3, -100, 100};
   size_t windowSize = 1 << 16;
+  std::string windowFn = WINDOW_MAP.begin()->first;
 
   SigGen selectedSigType = SigGen::Noise;
   FreqSweepSettings freqSweepSettings;
