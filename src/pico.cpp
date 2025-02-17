@@ -215,10 +215,9 @@ bool Scope::startNoise(double pkToPkV) {
     stopStream();
     restartStream = true;
   }
-  uint8_t buf[NOISE_WAVEFORM.size()];
-  std::copy(NOISE_WAVEFORM.cbegin(), NOISE_WAVEFORM.cend(), buf);
+  auto buf = NOISE_WAVEFORM | ranges::to_vector;
   auto success = ps2000_set_sig_gen_arbitrary(
-      handle, 0, pkToPkV * 1e6, DELTA_PHASE, DELTA_PHASE, 0, 1, buf,
+      handle, 0, pkToPkV * 1e6, DELTA_PHASE, DELTA_PHASE, 0, 1, buf.data(),
       NOISE_WAVEFORM.size(), PS2000_UP, 0);
   if (restartStream) {
     this->restartStream(false);
