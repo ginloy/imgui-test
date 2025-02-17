@@ -443,7 +443,7 @@ void drawScope(ScopeSettings &settings, Scope &scope) {
         idxs |
         rv::transform([scale](auto e) { return e * DELTA_TIME * scale; }) |
         ranges::to_vector;
-    auto ys = idxs | rv::transform([&data](auto e) { return data[e]; }) |
+    auto ys = idxs | rv::transform([&data, &settings](auto e) { return data[e] * to_scale(settings.voltageRange); }) |
               ranges::to_vector;
 
     ImPlot::PlotLine(name.c_str(), xs.data(), ys.data(), xs.size());
