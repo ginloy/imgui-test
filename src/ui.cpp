@@ -502,7 +502,9 @@ void drawScope(ScopeSettings &settings, Scope &scope) {
         idxs |
         rv::transform([scale](auto e) { return e * DELTA_TIME * scale; }) |
         ranges::to_vector;
-    auto ys = idxs | rv::transform([&data, &settings](auto e) { return data[e] * to_scale(settings.voltageRange); }) |
+    auto ys = idxs | rv::transform([&data, &settings](auto e) {
+                return data[e] * to_scale(settings.voltageRange);
+              }) |
               ranges::to_vector;
 
     ImPlot::PlotLine(name.c_str(), xs.data(), ys.data(), xs.size());
@@ -644,22 +646,21 @@ void drawScopeTab(ScopeSettings &settings, Scope &scope) {
     auto available = ImGui::GetContentRegionAvail();
     static auto scopeWidth =
         settings.showSpectrum ? available.x * 0.5f : available.x;
-    static auto specWidth = available.x - scopeWidth;
     if (settings.resetScopeWindow) {
-      scopeWidth = available.x * 0.5f;
-      specWidth = available.x - scopeWidth;
+      scopeWidth = settings.showSpectrum ? available.x * 0.5f : available.x;
+      settings.resetScopeWindow = false;
     }
+    float specWidth = available.x - scopeWidth;
     if (settings.showSpectrum) {
-      drawSpliiter(true, 1.f, &scopeWidth, &specWidth, 10., 10.);
+      drawSpliiter(false, 20.f, &scopeWidth, &specWidth, 10., 10.);
     }
-    if (ImGui::BeginChild("ScopeWindow", {scopeWidth, available.y},
-                          ImGuiChildFlags_AlwaysUseWindowPadding)) {
+    if (ImGui::BeginChild("ScopeWindow", {scopeWidth, available.y})) {
       drawScope(settings, scope);
       ImGui::EndChild();
     }
     if (settings.showSpectrum) {
-      if (ImGui::BeginChild("Spectrum", {specWidth, available.y},
-                            ImGuiChildFlags_AlwaysUseWindowPadding)) {
+      ImGui::SameLine();
+      if (ImGui::BeginChild("Spectrum", ImGui::GetContentRegionAvail())) {
         drawSpectrum(settings);
         ImGui::EndChild();
       }
