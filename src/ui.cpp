@@ -34,6 +34,8 @@ std::string to_string(SigGen signal);
 double to_scale(TimeBase tb);
 double to_scale(enPS2000Range range);
 ImVec2 to_limits(enPS2000Range range);
+void drawSpliiter(bool vertical, float thickness, float *size0, float *size1,
+                  float minSize0, float minSize1);
 void drawSweepSettings(FreqSweepSettings &settings);
 void drawSigGenControls(ScopeSettings &settings, Scope &scope);
 void drawSpectrumControls(ScopeSettings &settings);
@@ -150,6 +152,45 @@ ImVec2 to_limits(enPS2000Range range) {
   case PS2000_MAX_RANGES:
     return {0, 0};
   }
+}
+void drawSpliiter(bool vertical, float thickness, float *size0, float *size1,
+                  float minSize0, float minSize1) {
+  ImVec2 backup_pos = ImGui::GetCursorPos();
+  if (vertical)
+    ImGui::SetCursorPosY(backup_pos.y + *size0);
+  else
+    ImGui::SetCursorPosX(backup_pos.x + *size0);
+
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+  ImGui::PushStyleColor(
+      ImGuiCol_ButtonActive,
+      ImVec4(0, 0, 0,
+             0)); // We don't draw while active/pressed because as we move the
+                  // panes the splitter button will be 1 frame late
+  ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                        ImVec4(0.6f, 0.6f, 0.6f, 0.10f));
+  ImGui::Button("##Splitter", ImVec2(!vertical ? thickness : -1.0f,
+                                     vertical ? thickness : -1.0f));
+  ImGui::PopStyleColor(3);
+
+  ImGui::SetItemAllowOverlap(); // This is to allow having other buttons OVER
+                                // our splitter.
+
+  if (ImGui::IsItemActive()) {
+    float mouse_delta =
+        vertical ? ImGui::GetIO().MouseDelta.y : ImGui::GetIO().MouseDelta.x;
+
+    // Minimum pane size
+    if (mouse_delta < minSize0 - *size0)
+      mouse_delta = minSize0 - *size0;
+    if (mouse_delta > *size1 - minSize1)
+      mouse_delta = *size1 - minSize1;
+
+    // Apply resize
+    *size0 += mouse_delta;
+    *size1 -= mouse_delta;
+  }
+  ImGui::SetCursorPos(backup_pos);
 }
 
 void drawScopeControls(ScopeSettings &settings, Scope &scope) {
@@ -575,26 +616,50 @@ void drawScopeTab(ScopeSettings &settings, Scope &scope) {
   auto size = ImGui::GetContentRegionAvail();
   if (ImGui::BeginChild("Scope", {size.x, size.y * 0.75f},
                         ImGuiChildFlags_ResizeY | ImGuiChildFlags_Borders)) {
+    // auto available = ImGui::GetContentRegionAvail();
+    // auto flags = ImGuiChildFlags_None;
+    // if (settings.showSpectrum) {
+    //   flags = ImGuiChildFlags_ResizeX;
+    //   ImGui::SetNextWindowSizeConstraints({available.x * 0.2f, available.y},
+    //                                       {available.x * 0.8f, available.y});
+    //   available.x /= 2;
+    // }
+    // if (settings.resetScopeWindow) {
+    //   flags = ImGuiChildFlags_None;
+    //   settings.resetScopeWindow = false;
+    // }
+    // if (ImGui::BeginChild("ScopeHalf", available, flags)) {
+    //   drawScope(settings, scope);
+    //   ImGui::EndChild();
+    // }
+    // if (settings.showSpectrum) {
+    //   ImGui::SameLine();
+    //   if (ImGui::BeginChild("SpectrumHalf", ImGui::GetContentRegionAvail(),
+    //                         0)) {
+    //     drawSpectrum(settings);
+    //     ImGui::EndChild();
+    //   }
+    // }
+    // ImGui::EndChild();
     auto available = ImGui::GetContentRegionAvail();
-    auto flags = ImGuiChildFlags_None;
-    if (settings.showSpectrum) {
-      flags = ImGuiChildFlags_ResizeX;
-      ImGui::SetNextWindowSizeConstraints({available.x * 0.2f, available.y},
-                                          {available.x * 0.8f, available.y});
-      available.x /= 2;
-    }
+    static auto scopeWidth =
+        settings.showSpectrum ? available.x * 0.5f : available.x;
+    static auto specWidth = available.x - scopeWidth;
     if (settings.resetScopeWindow) {
-      flags = ImGuiChildFlags_None;
-      settings.resetScopeWindow = false;
+      scopeWidth = available.x * 0.5f;
+      specWidth = available.x - scopeWidth;
     }
-    if (ImGui::BeginChild("ScopeHalf", available, flags)) {
+    if (settings.showSpectrum) {
+      drawSpliiter(true, 1.f, &scopeWidth, &specWidth, 10., 10.);
+    }
+    if (ImGui::BeginChild("ScopeWindow", {scopeWidth, available.y},
+                          ImGuiChildFlags_AlwaysUseWindowPadding)) {
       drawScope(settings, scope);
       ImGui::EndChild();
     }
     if (settings.showSpectrum) {
-      ImGui::SameLine();
-      if (ImGui::BeginChild("SpectrumHalf", ImGui::GetContentRegionAvail(),
-                            0)) {
+      if (ImGui::BeginChild("Spectrum", {specWidth, available.y},
+                            ImGuiChildFlags_AlwaysUseWindowPadding)) {
         drawSpectrum(settings);
         ImGui::EndChild();
       }
