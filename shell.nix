@@ -1,8 +1,9 @@
-{stable ? import <nixpkgs> {}, pkgs? import <unstable> {}}: let
-  libps2000Repo = builtins.fetchGit {
+{pkgs ? import <nixpkgs> {}}: let
+  libps2000Repo = pkgs.fetchgit {
     url = "https://github.com/ginloy/libps2000";
+    hash = "sha256-gwNLIqXwYtfmj6nyaOJmHAsxBNK5XUcZNH3EVW0E9tk=";
   };
-  libps2000 = stable.callPackage libps2000Repo {};
+  libps2000 = pkgs.callPackage libps2000Repo {};
   # stdenv = pkgs.llvmPackages.libcxxStdenv;
 in
   (pkgs.mkShell.override { stdenv = pkgs.clangStdenv; }) {
