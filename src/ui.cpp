@@ -34,7 +34,7 @@ std::string to_string(SigGen signal);
 double to_scale(TimeBase tb);
 double to_scale(enPS2000Range range);
 ImVec2 to_limits(enPS2000Range range);
-void drawSpliiter(bool vertical, float thickness, float *size0, float *size1,
+void drawSplitter(bool vertical, float thickness, float *size0, float *size1,
                   float minSize0, float minSize1);
 void drawSweepSettings(FreqSweepSettings &settings);
 void drawSigGenControls(ScopeSettings &settings, Scope &scope);
@@ -153,7 +153,7 @@ ImVec2 to_limits(enPS2000Range range) {
     return {0, 0};
   }
 }
-void drawSpliiter(bool vertical, float thickness, float *size0, float *size1,
+void drawSplitter(bool vertical, float thickness, float *size0, float *size1,
                   float minSize0, float minSize1) {
   ImVec2 backup_pos = ImGui::GetCursorPos();
   if (vertical)
@@ -652,7 +652,7 @@ void drawScopeTab(ScopeSettings &settings, Scope &scope) {
     }
     float specWidth = available.x - scopeWidth;
     if (settings.showSpectrum) {
-      drawSpliiter(false, 20.f, &scopeWidth, &specWidth, 10., 10.);
+      drawSplitter(false, 20.f, &scopeWidth, &specWidth, 10., 10.);
     }
     if (ImGui::BeginChild("ScopeWindow", {scopeWidth, available.y})) {
       drawScope(settings, scope);
